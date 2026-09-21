@@ -88,7 +88,7 @@ function renderSites(){
  (state.sites.length?'<div class="site-list">'+state.sites.map(s=>'<div class="site-row"><div class="site-main"><div class="site-favicon"><i data-lucide="globe-2"></i></div><div><div class="site-name">'+esc(s.name)+'</div><div class="site-url">'+esc(s.url)+'</div><small class="muted">Added '+dt(s.created_at)+'</small></div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge '+(s.status==="active"?"success":"warning")+'">'+esc(s.status||"active")+'</span><button class="btn secondary manage-site" data-id="'+s.id+'"><i data-lucide="panel-top"></i>Manage</button><button class="icon-btn edit-site" data-id="'+s.id+'" title="Edit"><i data-lucide="pencil"></i></button><button class="icon-btn delete-site" data-id="'+s.id+'" title="Delete"><i data-lucide="trash-2"></i></button></div></div>').join("")+'</div>':
  '<div class="empty"><i data-lucide="globe-2"></i><h3>No websites</h3><p>Add a website to start.</p></div>')+'</div>';
  $("#add-site").onclick=()=>openSiteModal();
- $(".manage-site").forEach(b=>b.onclick=()=>openWebsiteManager(b.dataset.id));
+ $$(".manage-site").forEach(b=>b.onclick=()=>openWebsiteManager(b.dataset.id));
  $(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
  $$(".delete-site").forEach(b=>b.onclick=()=>deleteSite(b.dataset.id));
 }
@@ -148,10 +148,11 @@ function renderFiles(){
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
  $("#new-file").onclick=openNewFileModal;
- $(".file-item").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
- $("#file-search").oninput=e=>{$(".file-item").forEach(b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
+ $$(".file-item").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
+ $("#file-search").oninput=e=>{$$(".file-item").forEach(b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
- $("#history-file")?.addEventListener("click",openFileHistory);\n $("#delete-file")?.addEventListener("click",deleteSelectedFile);
+ $("#history-file")?.addEventListener("click",openFileHistory);
+ $("#delete-file")?.addEventListener("click",deleteSelectedFile);
  $("#refresh-preview")?.addEventListener("click",updatePreview);
  $("#open-preview")?.addEventListener("click",()=>{const src=$("#workspace-preview")?.srcdoc;if(src)window.open(URL.createObjectURL(new Blob([src],{type:"text/html"})),"_blank","noopener")});
 }
