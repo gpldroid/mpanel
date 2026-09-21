@@ -15,6 +15,37 @@ function authError(err){
  if(/invalid api key|apikey/i.test(msg)) return "Supabase API key is invalid. Use the project's Publishable key in assets/js/config.js.";
  return msg;
 }
+function setConnectionState(type,title,detail){
+ const box=$("#connection-box"),dot=$("#connection-dot"),heading=$("#connection-title"),text=$("#connection-detail");
+ if(!box)return;
+ box.className="connection-box "+type;
+ dot.className="connection-dot "+type;
+ heading.textContent=title;
+ text.textContent=detail;
+}
+async function testSupabaseConnection(){
+ const btn=$("#connection-test");
+ if(!btn)return;
+ btn.disabled=true;
+ btn.textContent="Testing connection…";
+ setConnectionState("testing","Testing Supabase connection","Contacting the Supabase Auth endpoint from this browser.");
+ try{
+  const base=SUPABASE_URL.trim().replace(/\/$/,"");
+  const response=await fetch(base+"/auth/v1/settings",{method:"GET",headers:{apikey:SUPABASE_ANON_KEY.trim()},cache:"no-store"});
+  if(response.ok){
+   setConnectionState("success","Supabase connection is working","The browser can reach your Supabase project. You can now test account registration or sign in.");
+  }else if(response.status===401){
+   setConnectionState("error","Supabase key rejected","The project is reachable, but the Publishable key was rejected. Check assets/js/config.js.");
+  }else{
+   setConnectionState("error","Supabase returned an error","HTTP "+response.status+" — "+(response.statusText||"request failed")+". The project is reachable, but its endpoint returned an error.");
+  }
+ }catch(error){
+  setConnectionState("error","Supabase connection failed",authError(error));
+ }finally{
+  btn.disabled=false;
+  btn.textContent="Test Supabase connection";
+ }
+}
 function stat(label,n,icon){return '<div class="card stat"><div><span class="muted">'+label+'</span><h3>'+n+'</h3></div><div class="stat-icon"><i data-lucide="'+icon+'"></i></div></div>'}
 function siteRow(s){return '<div class="site-row"><div class="site-main"><div class="site-favicon"><i data-lucide="globe-2"></i></div><div><div class="site-name">'+esc(s.name)+'</div><div class="site-url">'+esc(s.url)+'</div></div></div><span class="badge '+(s.status==="active"?"success":"warning")+'">'+esc(s.status||"active")+'</span></div>'}
 
@@ -92,6 +123,7 @@ function toggleTheme(){document.body.classList.toggle("dark");localStorage.setIt
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
 let signUp=false;
+$("#connection-test")?.addEventListener("click",testSupabaseConnection);
 $("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
 $("#auth-form").onsubmit=async e=>{
  e.preventDefault();
@@ -121,5 +153,5 @@ async function handleAuth(){
   toast(authError(error));
  }
 }
-supabase.auth.onAuthStateChange((event,session)=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}});
+supabase.auth.onAuthStateChange((event,session)=>{setTimeout(()=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}},0)});
 handleAuth().catch(error=>toast(authError(error)));icons();
