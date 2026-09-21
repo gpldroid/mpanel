@@ -198,7 +198,7 @@ async function openFileHistory(){
  if(error){toast(authError(error));return}
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>Version history — '+esc(file.path)+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div>'+(data?.length?'<div class="site-list">'+data.map(v=>'<div class="site-row"><div><strong>'+dt(v.created_at)+'</strong><small class="muted" style="display:block">Previous saved version</small></div><button class="btn secondary restore-version" data-id="'+v.id+'">Restore</button></div>').join("")+'</div>':'<div class="empty">No previous versions yet. Save the file to create one.</div>')+'</div></div>';
  icons();$("#close-modal").onclick=closeModal;
- $(".restore-version").forEach(b=>b.onclick=async()=>{const v=data.find(x=>x.id===b.dataset.id);if(!v)return;if(!confirm("Restore this previous version? The current content will be snapshotted first."))return;const {data:updated,error:restoreError}=await supabase.from("site_files").update({content:v.content,updated_at:new Date().toISOString()}).eq("id",file.id).select().single();if(restoreError){toast(authError(restoreError));return}state.selectedFile=updated;await loadSiteFiles();closeModal();renderFiles();renderTheme();updatePreview();toast("Version restored","success")});
+ $$(".restore-version").forEach(b=>b.onclick=async()=>{const v=data.find(x=>x.id===b.dataset.id);if(!v)return;if(!confirm("Restore this previous version? The current content will be snapshotted first."))return;const {data:updated,error:restoreError}=await supabase.from("site_files").update({content:v.content,updated_at:new Date().toISOString()}).eq("id",file.id).select().single();if(restoreError){toast(authError(restoreError));return}state.selectedFile=updated;await loadSiteFiles();closeModal();renderFiles();renderTheme();updatePreview();toast("Version restored","success")});
 }
 function renderTheme(){
  const s=state.selectedSite;
@@ -264,7 +264,7 @@ function renderSettings(){
  $("#view-settings").innerHTML='<div class="section-head"><div><h3>Settings</h3><p class="muted">Account and dashboard preferences.</p></div></div><div class="grid two-col"><section class="card"><h3>Account</h3><div style="margin-top:15px"><label>Email<input value="'+esc(state.user?.email||"")+'" disabled></label></div><p class="tiny muted">Authentication is handled by Supabase Auth.</p></section><section class="card"><h3>Appearance</h3><p class="muted">Choose light or dark mode.</p><button class="btn secondary" id="settings-theme"><i data-lucide="moon"></i>Toggle theme</button></section></div>';
  $("#settings-theme").onclick=toggleTheme;
 }
-function showView(v){state.view=v;$(".view").forEach(x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");$(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
+function showView(v){state.view=v;$$(".view").forEach(x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");$$(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
@@ -287,7 +287,7 @@ $("#auth-form").onsubmit=async e=>{
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
-$$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+$$$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 
 async function handleAuth(){
