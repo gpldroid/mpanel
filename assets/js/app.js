@@ -144,16 +144,26 @@ function renderFiles(){
  const file=state.selectedFile;
  $("#view-files").innerHTML='<div class="workspace-head"><div><span class="eyebrow">FILE MANAGER</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><p class="muted">Edit website source files safely with version snapshots.</p></div><div class="workspace-actions"><button class="btn secondary" id="files-back"><i data-lucide="arrow-left"></i>Overview</button><button class="btn primary" id="new-file"><i data-lucide="file-plus-2"></i>New file</button></div></div>'+
  '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Website files</h3><span class="badge neutral">'+state.files.length+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+'</div></aside>'+
- '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>':"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
+ '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
  $("#new-file").onclick=openNewFileModal;
  $(".file-item").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
  $("#file-search").oninput=e=>{$(".file-item").forEach(b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
- $("#history-file")?.addEventListener("click",openFileHistory);
+ $("#history-file")?.addEventListener("click",openFileHistory);\n $("#delete-file")?.addEventListener("click",deleteSelectedFile);
  $("#refresh-preview")?.addEventListener("click",updatePreview);
  $("#open-preview")?.addEventListener("click",()=>{const src=$("#workspace-preview")?.srcdoc;if(src)window.open(URL.createObjectURL(new Blob([src],{type:"text/html"})),"_blank","noopener")});
+}
+async function deleteSelectedFile(){
+ if(!state.selectedFile||state.selectedFile.is_protected)return;
+ if(!confirm("Delete "+state.selectedFile.path+"? This cannot be undone."))return;
+ const id=state.selectedFile.id;
+ const {error}=await supabase.from("site_files").delete().eq("id",id);
+ if(error){toast(authError(error));return}
+ await supabase.rpc("write_audit_log",{p_action:"delete_file",p_entity_type:"site_file",p_entity_id:id,p_details:{path:state.selectedFile.path,site_id:state.selectedFile.site_id}});
+ state.files=state.files.filter(x=>x.id!==id);state.selectedFile=state.files.find(x=>x.path==="index.html")||state.files[0]||null;
+ toast("File deleted","success");renderFiles();renderTheme();renderManager();updatePreview();
 }
 async function saveSelectedFile(){
  if(!state.selectedFile)return;
