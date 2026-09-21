@@ -91,7 +91,7 @@ function renderSites(){
  $$(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
  $$(".delete-site").forEach(b=>b.onclick=()=>deleteSite(b.dataset.id));
 }
-async function deleteSite(id){if(!confirm("Delete this website and related data?"))return;const{error}=await supabase.from("sites").delete().eq("id",id);if(error)toast(authError(error));else{toast("Website deleted");loadData())}}
+async function deleteSite(id){if(!confirm("Delete this website and related data?"))return;const{error}=await supabase.from("sites").delete().eq("id",id);if(error)toast(authError(error));else{toast("Website deleted","success");await loadData()}}
 function openSiteModal(site=null){
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>'+(site?"Edit website":"Add website")+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="site-form" class="form-grid"><label>Name<input name="name" required value="'+esc(site?.name||"")+'" placeholder="My Website"></label><label>URL<input name="url" type="url" required value="'+esc(site?.url||"")+'" placeholder="https://example.com"></label><label class="full-field">Description<textarea name="description" rows="4">'+esc(site?.description||"")+'</textarea></label><label>Status<select name="status"><option value="active" '+(site?.status==="active"?"selected":"")+' >Active</option><option value="paused" '+(site?.status==="paused"?"selected":"")+' >Paused</option></select></label><div></div><div class="modal-actions full-field"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Save website</button></div></form></div></div>';
  icons();$("#close-modal").onclick=closeModal;$("#cancel-modal").onclick=closeModal;
@@ -135,7 +135,7 @@ if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("da
 
 let signUp=false;
 $("#connection-test")?.addEventListener("click",testSupabaseConnection);
-$("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";"#auth-submit";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
+$("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
 $("#auth-form").onsubmit=async e=>{
  e.preventDefault();
  const btn=$("#auth-submit"),email=$("#auth-email").value.trim(),password=$("#auth-password").value;
@@ -159,7 +159,10 @@ async function handleAuth(){
  try{
   const{data:{session},error}=await supabase.auth.getSession();
   if(error)throw error;
-  if(session){state.user=session.user;$("#auth-view").classList.add("hidden");$("#app-view").classList.remove("hidden");$("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();await loadData();showView("dashboard")}
+  if(session){
+   state.user=session.user;
+   if(cleanAuthHash()) history.replaceState({},document.title,getAuthRedirectUrl());
+   $("#auth-view").classList.add("hidden");$("#app-view").classList.remove("hidden");$("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();await loadData();showView("dashboard")}
   else{$("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden")}
  }catch(error){
   state.user=null;
@@ -167,6 +170,5 @@ async function handleAuth(){
   toast(authError(error));
  }
 }
-if(cleanAuthHash())history.replaceState({},document.title,getAuthRedirectUrl());
 supabase.auth.onAuthStateChange((event,session)=>{setTimeout(()=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}},0)});
 handleAuth().catch(error=>toast(authError(error)));icons();
