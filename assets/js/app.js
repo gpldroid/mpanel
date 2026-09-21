@@ -2,7 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
-const state={user:null,sites:[],domains:[],seo:[],view:"dashboard"};
+const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard"};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const icons=()=>window.lucide?.createIcons();
@@ -69,9 +69,9 @@ async function loadData(){
   supabase.from("seo_checks").select("*").order("created_at",{ascending:false})
  ]);
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];renderAll();
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;renderAll();
 }
-function renderAll(){renderDashboard();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
+function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
 function renderDashboard(){
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
@@ -85,12 +85,136 @@ function renderDashboard(){
 
 function renderSites(){
  $("#view-sites").innerHTML='<div class="toolbar"><div><h3>My Sites</h3><p class="muted">Manage your websites and basic settings.</p></div><button class="btn primary" id="add-site"><i data-lucide="plus"></i>Add site</button></div><div class="card">'+
- (state.sites.length?'<div class="site-list">'+state.sites.map(s=>'<div class="site-row"><div class="site-main"><div class="site-favicon"><i data-lucide="globe-2"></i></div><div><div class="site-name">'+esc(s.name)+'</div><div class="site-url">'+esc(s.url)+'</div><small class="muted">Added '+dt(s.created_at)+'</small></div></div><div style="display:flex;gap:8px;align-items:center"><span class="badge '+(s.status==="active"?"success":"warning")+'">'+esc(s.status||"active")+'</span><button class="icon-btn edit-site" data-id="'+s.id+'"><i data-lucide="pencil"></i></button><button class="icon-btn delete-site" data-id="'+s.id+'"><i data-lucide="trash-2"></i></button></div></div>').join("")+'</div>':
+ (state.sites.length?'<div class="site-list">'+state.sites.map(s=>'<div class="site-row"><div class="site-main"><div class="site-favicon"><i data-lucide="globe-2"></i></div><div><div class="site-name">'+esc(s.name)+'</div><div class="site-url">'+esc(s.url)+'</div><small class="muted">Added '+dt(s.created_at)+'</small></div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge '+(s.status==="active"?"success":"warning")+'">'+esc(s.status||"active")+'</span><button class="btn secondary manage-site" data-id="'+s.id+'"><i data-lucide="panel-top"></i>Manage</button><button class="icon-btn edit-site" data-id="'+s.id+'" title="Edit"><i data-lucide="pencil"></i></button><button class="icon-btn delete-site" data-id="'+s.id+'" title="Delete"><i data-lucide="trash-2"></i></button></div></div>').join("")+'</div>':
  '<div class="empty"><i data-lucide="globe-2"></i><h3>No websites</h3><p>Add a website to start.</p></div>')+'</div>';
  $("#add-site").onclick=()=>openSiteModal();
- $$(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
+ $(".manage-site").forEach(b=>b.onclick=()=>openWebsiteManager(b.dataset.id));
+ $(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
  $$(".delete-site").forEach(b=>b.onclick=()=>deleteSite(b.dataset.id));
 }
+
+async function ensureWorkspaceFiles(site){
+ if(!site)return;
+ const {data,error}=await supabase.from("site_files").select("*").eq("site_id",site.id).order("path");
+ if(error){toast(authError(error));return}
+ if(!data?.length){
+  const defaults=[
+   {user_id:state.user.id,site_id:site.id,path:"index.html",content:"<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>"+esc(site.name)+"</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n<main>\n<h1>"+esc(site.name)+"</h1>\n<p>Welcome to your website. Edit this page from mPanel.</p>\n</main>\n<script src=\"script.js\"></script>\n</body>\n</html>",mime_type:"text/html",is_protected:true},
+   {user_id:state.user.id,site_id:site.id,path:"style.css",content:"body{font-family:system-ui,sans-serif;margin:0;padding:48px;background:#f8fafc;color:#0f172a}main{max-width:900px;margin:auto;background:#fff;padding:40px;border-radius:20px;box-shadow:0 20px 50px rgba(15,23,42,.08)}h1{font-size:42px;margin-top:0}",mime_type:"text/css",is_protected:false},
+   {user_id:state.user.id,site_id:site.id,path:"script.js",content:"document.documentElement.dataset.mpanel=\"preview\";",mime_type:"text/javascript",is_protected:false}
+  ];
+  const {error:insertError}=await supabase.from("site_files").insert(defaults);
+  if(insertError)toast(authError(insertError));
+  const again=await supabase.from("site_files").select("*").eq("site_id",site.id).order("path");
+  state.files=again.data||[];
+ }else state.files=data;
+ if(!state.selectedFile||!state.files.some(x=>x.id===state.selectedFile.id))state.selectedFile=state.files.find(x=>x.path==="index.html")||state.files[0]||null;
+ renderFiles();renderTheme();updatePreview();
+}
+function openWebsiteManager(id){
+ state.selectedSite=state.sites.find(s=>s.id===id)||state.sites[0]||null;
+ if(!state.selectedSite){toast("Add a website first.");return}
+ showView("manager");
+ ensureWorkspaceFiles(state.selectedSite);
+}
+function managerTab(view){
+ if(!state.selectedSite){toast("Select a website first.");showView("sites");return}
+ showView(view);ensureWorkspaceFiles(state.selectedSite);
+}
+function renderManager(){
+ const s=state.selectedSite;
+ if(!s){$("#view-manager").innerHTML='<div class="card workspace-empty"><div><i data-lucide="panel-top"></i><h3>Select a website</h3><p class="muted">Add a website first, then open Website Manager.</p><button class="btn primary" data-go="sites">Go to My Sites</button></div></div>';$("#view-manager").querySelector("[data-go]")?.addEventListener("click",()=>showView("sites"));return}
+ $("#view-manager").innerHTML='<div class="workspace-head"><div class="workspace-title"><div class="workspace-icon"><i data-lucide="panel-top"></i></div><div><span class="eyebrow">WEBSITE CONTROL CENTER</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><div class="site-url">'+esc(s.url)+'</div></div></div><div class="workspace-actions"><span class="connection-pill"><i></i>Managed workspace</span><button class="btn secondary" id="manager-refresh"><i data-lucide="refresh-cw"></i>Refresh</button></div></div>'+
+ '<div class="card" style="margin-bottom:18px"><div class="workspace-tabs"><button class="btn active" data-workspace="manager">Overview</button><button class="btn secondary" data-workspace="files"><i data-lucide="folder-code"></i>Files</button><button class="btn secondary" data-workspace="theme"><i data-lucide="palette"></i>Theme & Preview</button><button class="btn secondary" id="manager-site-settings"><i data-lucide="settings"></i>Site settings</button></div></div>'+
+ '<div class="manager-cards"><div class="manager-card"><i data-lucide="folder-code"></i><h4>File Manager</h4><p>Create, edit, rename and remove text files stored for this website.</p><button class="btn secondary" style="margin-top:14px" data-workspace="files">Open files</button></div><div class="manager-card"><i data-lucide="palette"></i><h4>Theme Editor</h4><p>Edit HTML, CSS and JavaScript with an isolated live preview.</p><button class="btn secondary" style="margin-top:14px" data-workspace="theme">Open editor</button></div><div class="manager-card"><i data-lucide="history"></i><h4>Version safety</h4><p>Every saved file change creates a server-side previous version in Supabase.</p><button class="btn secondary" style="margin-top:14px" id="manager-history">View history</button></div></div>'+
+ '<div class="grid two-col" style="margin-top:18px"><section class="card"><h3>Website status</h3><p class="muted">This workspace is connected to your mPanel database. Publishing to an external host requires a future GitHub/deployment connector.</p><div class="site-list" style="margin-top:14px"><div class="site-row"><span>Files</span><strong>'+state.files.length+'</strong></div><div class="site-row"><span>Last updated</span><strong>'+dt(state.files.reduce((a,b)=>new Date(a.updated_at)>new Date(b.updated_at)?a:b,{updated_at:s.updated_at}).updated_at)+'</strong></div></div></section><section class="card"><h3>Safe editing</h3><p class="muted">index.html is protected from deletion. CSS and JavaScript can be changed and previewed before you save.</p><span class="badge success">Supabase RLS enabled</span></section></div>';
+ $("[data-workspace]").forEach(b=>b.onclick=()=>managerTab(b.dataset.workspace));
+ $("#manager-refresh").onclick=()=>ensureWorkspaceFiles(state.selectedSite);
+ $("#manager-site-settings").onclick=()=>openSiteModal(s);
+ $("#manager-history").onclick=()=>openFileHistory();
+}
+async function loadSiteFiles(){
+ if(!state.selectedSite){state.files=[];return}
+ const {data,error}=await supabase.from("site_files").select("*").eq("site_id",state.selectedSite.id).order("path");
+ if(error){toast(authError(error));state.files=[]}else state.files=data||[];
+}
+function renderFiles(){
+ const s=state.selectedSite;
+ if(!s){$("#view-files").innerHTML='<div class="card workspace-empty"><div><h3>No website selected</h3><button class="btn primary" id="files-go-sites">Choose a website</button></div></div>';$("#files-go-sites")?.addEventListener("click",()=>showView("sites"));return}
+ const file=state.selectedFile;
+ $("#view-files").innerHTML='<div class="workspace-head"><div><span class="eyebrow">FILE MANAGER</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><p class="muted">Edit website source files safely with version snapshots.</p></div><div class="workspace-actions"><button class="btn secondary" id="files-back"><i data-lucide="arrow-left"></i>Overview</button><button class="btn primary" id="new-file"><i data-lucide="file-plus-2"></i>New file</button></div></div>'+
+ '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Website files</h3><span class="badge neutral">'+state.files.length+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+'</div></aside>'+
+ '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>':"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
+ '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
+ $("#files-back").onclick=()=>showView("manager");
+ $("#new-file").onclick=openNewFileModal;
+ $(".file-item").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
+ $("#file-search").oninput=e=>{$(".file-item").forEach(b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
+ $("#save-file")?.addEventListener("click",saveSelectedFile);
+ $("#history-file")?.addEventListener("click",openFileHistory);
+ $("#refresh-preview")?.addEventListener("click",updatePreview);
+ $("#open-preview")?.addEventListener("click",()=>{const src=$("#workspace-preview")?.srcdoc;if(src)window.open(URL.createObjectURL(new Blob([src],{type:"text/html"})),"_blank","noopener")});
+}
+async function saveSelectedFile(){
+ if(!state.selectedFile)return;
+ const content=$("#code-editor").value;
+ const {data,error}=await supabase.from("site_files").update({content,updated_at:new Date().toISOString()}).eq("id",state.selectedFile.id).select().single();
+ if(error){toast(authError(error));return}
+ state.selectedFile=data;const i=state.files.findIndex(x=>x.id===data.id);if(i>=0)state.files[i]=data;
+ await supabase.rpc("write_audit_log",{p_action:"update_file",p_entity_type:"site_file",p_entity_id:data.id,p_details:{path:data.path,site_id:data.site_id}});
+ toast("File saved and previous version recorded","success");renderFiles();renderTheme();renderManager();updatePreview();
+}
+function previewDocument(){
+ const html=state.files.find(x=>x.path==="index.html")?.content||"";
+ const css=state.files.find(x=>x.path==="style.css")?.content||"";
+ const js=state.files.find(x=>x.path==="script.js")?.content||"";
+ return html.replace(/<link[^>]+href=["'](?:\.\/)?style\.css["'][^>]*>/i,"<style>"+css.replace(/<\\/style/gi,"<\\/style")+"</style>")
+   .replace(/<script[^>]+src=["'](?:\.\/)?script\.js["'][^>]*><\\/script>/i,"<script>"+js.replace(/<\\/script/gi,"<\\/script")+"</script>");
+}
+function updatePreview(){
+ const frame=$("#workspace-preview")||$("#theme-preview");if(!frame)return;
+ frame.srcdoc=previewDocument();
+}
+function openNewFileModal(){
+ $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal file-modal"><div class="modal-head"><h3>New website file</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="new-file-form"><label>File path<input name="path" required pattern="[A-Za-z0-9_./-]+" placeholder="pages/about.html"></label><label style="margin-top:14px">Type<select name="mime"><option value="text/html">HTML</option><option value="text/css">CSS</option><option value="text/javascript">JavaScript</option><option value="text/plain">Text</option></select></label><label style="margin-top:14px">Initial content<textarea name="content" placeholder="Start writing…"></textarea></label><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Create file</button></div></form></div></div>';
+ icons();$("#close-modal").onclick=closeModal;$("#cancel-modal").onclick=closeModal;
+ $("#new-file-form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const path=f.get("path").trim().replace(/^\/+/,"");if(state.files.some(x=>x.path===path)){toast("A file with this path already exists.");return}const {data,error}=await supabase.from("site_files").insert({user_id:state.user.id,site_id:state.selectedSite.id,path,content:f.get("content"),mime_type:f.get("mime")}).select().single();if(error){toast(authError(error));return}state.files.push(data);state.files.sort((a,b)=>a.path.localeCompare(b.path));state.selectedFile=data;closeModal();renderFiles();renderTheme();updatePreview();toast("File created","success")};
+}
+async function openFileHistory(){
+ const file=state.selectedFile;
+ if(!file){toast("Select a file first.");return}
+ const {data,error}=await supabase.from("site_file_versions").select("*").eq("file_id",file.id).order("created_at",{ascending:false}).limit(10);
+ if(error){toast(authError(error));return}
+ $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>Version history — '+esc(file.path)+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div>'+(data?.length?'<div class="site-list">'+data.map(v=>'<div class="site-row"><div><strong>'+dt(v.created_at)+'</strong><small class="muted" style="display:block">Previous saved version</small></div><button class="btn secondary restore-version" data-id="'+v.id+'">Restore</button></div>').join("")+'</div>':'<div class="empty">No previous versions yet. Save the file to create one.</div>')+'</div></div>';
+ icons();$("#close-modal").onclick=closeModal;
+ $(".restore-version").forEach(b=>b.onclick=async()=>{const v=data.find(x=>x.id===b.dataset.id);if(!v)return;if(!confirm("Restore this previous version? The current content will be snapshotted first."))return;const {data:updated,error:restoreError}=await supabase.from("site_files").update({content:v.content,updated_at:new Date().toISOString()}).eq("id",file.id).select().single();if(restoreError){toast(authError(restoreError));return}state.selectedFile=updated;await loadSiteFiles();closeModal();renderFiles();renderTheme();updatePreview();toast("Version restored","success")});
+}
+function renderTheme(){
+ const s=state.selectedSite;
+ if(!s){$("#view-theme").innerHTML='<div class="card workspace-empty"><div><h3>No website selected</h3><button class="btn primary" id="theme-go-sites">Choose a website</button></div></div>';$("#theme-go-sites")?.addEventListener("click",()=>showView("sites"));return}
+ const options=["index.html","style.css","script.js"].filter(p=>state.files.some(x=>x.path===p));
+ const file=state.selectedFile&&options.includes(state.selectedFile.path)?state.selectedFile:(state.files.find(x=>x.path==="index.html")||state.files[0]);
+ state.selectedFile=file||null;
+ $("#view-theme").innerHTML='<div class="workspace-head"><div><span class="eyebrow">THEME EDITOR</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><p class="muted">Edit the core template files and see the result before saving.</p></div><div class="workspace-actions"><button class="btn secondary" id="theme-back"><i data-lucide="arrow-left"></i>Overview</button><button class="btn primary" id="theme-save"><i data-lucide="save"></i>Save changes</button></div></div>'+
+ '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Theme files</h3></div><div class="file-list">'+options.map(p=>'<button class="file-item '+(file?.path===p?"active":"")+'" data-theme-file="'+p+'"><i data-lucide="'+(p.endsWith(".html")?"file-code-2":p.endsWith(".css")?"file-cog":"file-text")+'"></i><span>'+p+'</span></button>').join("")+'</div><div class="card" style="margin-top:12px;padding:12px"><small class="muted">Tip: edit HTML structure, CSS design or JavaScript behavior. The preview is sandboxed and does not publish changes.</small></div></aside>'+
+ '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"")+'</div><div class="editor-actions"><span class="badge neutral">Live draft</span></div></div><textarea id="theme-editor" class="code-editor" spellcheck="false">'+esc(file?.content||"")+'</textarea></section>'+
+ '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><button class="icon-btn" id="theme-refresh"><i data-lucide="refresh-cw"></i></button></div><iframe id="theme-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
+ $("#theme-back").onclick=()=>showView("manager");
+ $("#view-theme [data-theme-file]").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.path===b.dataset.themeFile)||null;renderTheme();updatePreview()});
+ $("#theme-save").onclick=saveThemeFile;
+ $("#theme-editor").oninput=()=>{const draft=state.files.find(x=>x.id===state.selectedFile?.id);if(draft)draft.content=$("#theme-editor").value;updatePreview()};
+ $("#theme-refresh").onclick=updatePreview;updatePreview();
+}
+async function saveThemeFile(){
+ if(!state.selectedFile)return;
+ const content=$("#theme-editor").value;
+ const {data,error}=await supabase.from("site_files").update({content,updated_at:new Date().toISOString()}).eq("id",state.selectedFile.id).select().single();
+ if(error){toast(authError(error));return}
+ state.selectedFile=data;const i=state.files.findIndex(x=>x.id===data.id);if(i>=0)state.files[i]=data;
+ await supabase.rpc("write_audit_log",{p_action:"update_theme_file",p_entity_type:"site_file",p_entity_id:data.id,p_details:{path:data.path,site_id:data.site_id}});
+ toast("Theme changes saved","success");renderTheme();renderManager();updatePreview();
+}
+
 async function deleteSite(id){if(!confirm("Delete this website and related data?"))return;const{error}=await supabase.from("sites").delete().eq("id",id);if(error)toast(authError(error));else{toast("Website deleted","success");await loadData()}}
 function openSiteModal(site=null){
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>'+(site?"Edit website":"Add website")+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="site-form" class="form-grid"><label>Name<input name="name" required value="'+esc(site?.name||"")+'" placeholder="My Website"></label><label>URL<input name="url" type="url" required value="'+esc(site?.url||"")+'" placeholder="https://example.com"></label><label class="full-field">Description<textarea name="description" rows="4">'+esc(site?.description||"")+'</textarea></label><label>Status<select name="status"><option value="active" '+(site?.status==="active"?"selected":"")+' >Active</option><option value="paused" '+(site?.status==="paused"?"selected":"")+' >Paused</option></select></label><div></div><div class="modal-actions full-field"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Save website</button></div></form></div></div>';
@@ -129,7 +253,7 @@ function renderSettings(){
  $("#view-settings").innerHTML='<div class="section-head"><div><h3>Settings</h3><p class="muted">Account and dashboard preferences.</p></div></div><div class="grid two-col"><section class="card"><h3>Account</h3><div style="margin-top:15px"><label>Email<input value="'+esc(state.user?.email||"")+'" disabled></label></div><p class="tiny muted">Authentication is handled by Supabase Auth.</p></section><section class="card"><h3>Appearance</h3><p class="muted">Choose light or dark mode.</p><button class="btn secondary" id="settings-theme"><i data-lucide="moon"></i>Toggle theme</button></section></div>';
  $("#settings-theme").onclick=toggleTheme;
 }
-function showView(v){state.view=v;$$(".view").forEach(x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");$$(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
+function showView(v){state.view=v;$(".view").forEach(x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");$(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
