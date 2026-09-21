@@ -93,17 +93,33 @@ if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("da
 
 let signUp=false;
 $("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
-$("#auth-form").onsubmit=async e=>{e.preventDefault();const email=$("#auth-email").value.trim(),password=$("#auth-password").value;const r=signUp?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(r.error){toast(authError(r.error));return}
-else if(signUp&&!r.data.session){toast("Account created. Check your email to confirm the account.","success");return}
-else handleAuth()};
+$("#auth-form").onsubmit=async e=>{
+ e.preventDefault();
+ const btn=$("#auth-submit"),email=$("#auth-email").value.trim(),password=$("#auth-password").value;
+ btn.disabled=true;btn.textContent=signUp?"Creating…":"Signing in…";
+ try{
+  const r=signUp?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});
+  if(r.error){toast(authError(r.error));return}
+  if(signUp&&!r.data.session){toast("Account created. Check your email to confirm the account.","success");return}
+  await handleAuth();
+ }catch(error){toast(authError(error))}
+ finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
+};
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
 $$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 
 async function handleAuth(){
- const{data:{session}}=await supabase.auth.getSession();
- if(session){state.user=session.user;$("#auth-view").classList.add("hidden");$("#app-view").classList.remove("hidden");$("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();await loadData();showView("dashboard")}
- else{$("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden")}
+ try{
+  const{data:{session},error}=await supabase.auth.getSession();
+  if(error)throw error;
+  if(session){state.user=session.user;$("#auth-view").classList.add("hidden");$("#app-view").classList.remove("hidden");$("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();await loadData();showView("dashboard")}
+  else{$("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden")}
+ }catch(error){
+  state.user=null;
+  $("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden");
+  toast(authError(error));
+ }
 }
 supabase.auth.onAuthStateChange((event,session)=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}});
 handleAuth().catch(error=>toast(authError(error)));icons();
