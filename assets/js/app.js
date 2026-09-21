@@ -1,14 +1,20 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
-const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],view:"dashboard"};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const icons=()=>window.lucide?.createIcons();
 const dt=v=>v?new Date(v).toLocaleDateString():"—";
 
-function toast(m){const e=document.createElement("div");e.className="toast";e.textContent=m;$("#toast-root").append(e);setTimeout(()=>e.remove(),3000)}
+function toast(m,type="error"){const e=document.createElement("div");e.className="toast "+(type==="success"?"toast-success":"");e.textContent=m;$("#toast-root").append(e);setTimeout(()=>e.remove(),5000)}
+function authError(err){
+ const msg=String(err?.message||err||"Unknown error");
+ if(/failed to fetch|networkerror|load failed/i.test(msg)) return "Unable to connect to Supabase. Check your Supabase URL, publishable key, project status, and browser network connection.";
+ if(/invalid api key|apikey/i.test(msg)) return "Supabase API key is invalid. Use the project's Publishable key in assets/js/config.js.";
+ return msg;
+}
 function stat(label,n,icon){return '<div class="card stat"><div><span class="muted">'+label+'</span><h3>'+n+'</h3></div><div class="stat-icon"><i data-lucide="'+icon+'"></i></div></div>'}
 function siteRow(s){return '<div class="site-row"><div class="site-main"><div class="site-favicon"><i data-lucide="globe-2"></i></div><div><div class="site-name">'+esc(s.name)+'</div><div class="site-url">'+esc(s.url)+'</div></div></div><span class="badge '+(s.status==="active"?"success":"warning")+'">'+esc(s.status||"active")+'</span></div>'}
 
@@ -19,7 +25,7 @@ async function loadData(){
   supabase.from("domains").select("*,sites(name)").order("created_at",{ascending:false}),
   supabase.from("seo_checks").select("*").order("created_at",{ascending:false})
  ]);
- if(a.error)toast(a.error.message); if(b.error)toast(b.error.message); if(c.error)toast(c.error.message);
+ if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error));
  state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];renderAll();
 }
 function renderAll(){renderDashboard();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
@@ -42,7 +48,7 @@ function renderSites(){
  $$(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
  $$(".delete-site").forEach(b=>b.onclick=()=>deleteSite(b.dataset.id));
 }
-async function deleteSite(id){if(!confirm("Delete this website and related data?"))return;const{error}=await supabase.from("sites").delete().eq("id",id);if(error)toast(error.message);else{toast("Website deleted");loadData()}}
+async function deleteSite(id){if(!confirm("Delete this website and related data?"))return;const{error}=await supabase.from("sites").delete().eq("id",id);if(error)toast(authError(error));else{toast("Website deleted");loadData()}}
 
 function openSiteModal(site=null){
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>'+(site?"Edit website":"Add website")+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="site-form" class="form-grid"><label>Name<input name="name" required value="'+esc(site?.name||"")+'" placeholder="My Website"></label><label>URL<input name="url" type="url" required value="'+esc(site?.url||"")+'" placeholder="https://example.com"></label><label class="full-field">Description<textarea name="description" rows="4">'+esc(site?.description||"")+'</textarea></label><label>Status<select name="status"><option value="active" '+(site?.status==="active"?"selected":"")+' >Active</option><option value="paused" '+(site?.status==="paused"?"selected":"")+' >Paused</option></select></label><div></div><div class="modal-actions full-field"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Save website</button></div></form></div></div>';
@@ -87,7 +93,9 @@ if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("da
 
 let signUp=false;
 $("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
-$("#auth-form").onsubmit=async e=>{e.preventDefault();const email=$("#auth-email").value.trim(),password=$("#auth-password").value;const r=signUp?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(r.error)toast(r.error.message);else if(signUp&&!r.data.session)toast("Account created. Check your email.");else handleAuth()};
+$("#auth-form").onsubmit=async e=>{e.preventDefault();const email=$("#auth-email").value.trim(),password=$("#auth-password").value;const r=signUp?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(r.error){toast(authError(r.error));return}
+else if(signUp&&!r.data.session){toast("Account created. Check your email to confirm the account.","success");return}
+else handleAuth()};
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
 $$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
@@ -98,4 +106,4 @@ async function handleAuth(){
  else{$("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden")}
 }
 supabase.auth.onAuthStateChange((event,session)=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}});
-handleAuth();icons();
+handleAuth().catch(error=>toast(authError(error)));icons();
