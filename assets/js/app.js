@@ -287,7 +287,7 @@ $("#auth-form").onsubmit=async e=>{
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
-$$$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 
 async function handleAuth(){
