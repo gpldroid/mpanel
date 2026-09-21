@@ -18,9 +18,9 @@ Authentication, dashboard, website management, domains, SEO checklist, basic bro
 
 ## Setup
 1. Create a Supabase project.
-2. Run supabase/migrations/001_initial_schema.sql.
-3. Put your Supabase URL and publishable/anon key in assets/js/config.js.
-4. Never expose the service_role key.
-5. Enable GitHub Pages from main/root.
+2. Run supabase/migrations/001_initial_schema.sql, then supabase/migrations/002_monitoring_audit.sql.
+3. In Supabase Dashboard → Authentication → Providers, enable Email. In Authentication → URL Configuration, add your GitHub Pages URL as the Site URL and add the same URL (plus any auth callback path you use) to Redirect URLs.\n4. Put your Supabase URL and publishable/anon key in assets/js/config.js.
+5. Never expose the service_role/secret key.
+6. Enable GitHub Pages from main/root.
 
 Server-side scheduled monitoring can be added later with Supabase Edge Functions/pg_cron.
