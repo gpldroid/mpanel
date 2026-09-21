@@ -179,8 +179,11 @@ function previewDocument(){
  const html=state.files.find(x=>x.path==="index.html")?.content||"";
  const css=state.files.find(x=>x.path==="style.css")?.content||"";
  const js=state.files.find(x=>x.path==="script.js")?.content||"";
- return html.replace(/<link[^>]+href=["'](?:\.\/)?style\.css["'][^>]*>/i,"<style>"+css.replace(/<\/style/gi,"<\\/style")+"</style>")
-   .replace(/<script[^>]+src=["'](?:\.\/)?script\.js["'][^>]*><\\/script>/i,"<script>"+js.replace(/<\/script/gi,"<\\/script")+"</script>");
+ const safeCss=css.replace(/<\\/style/gi,"<\\\\/style");
+ const safeJs=js.replace(/<\\/script/gi,"<\\\\/script");
+ return html
+  .replace(/<link[^>]*href=["'](?:\\.\\/)?style\\.css["'][^>]*>/i,"<style>"+safeCss+"</style>")
+  .replace(/<script[^>]*src=["'](?:\\.\\/)?script\\.js["'][^>]*><\\/script>/i,"<script>"+safeJs+"</script>");
 }
 function updatePreview(){
  const frame=$("#workspace-preview")||$("#theme-preview");if(!frame)return;
