@@ -72,7 +72,7 @@ as $$
 begin
   insert into public.site_files(user_id,site_id,path,content,mime_type,is_protected)
   values
-   (new.user_id,new.id,'index.html','<!doctype html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n<title>'+replace(new.name,'&','&amp;')+'</title>\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n<main>\n  <h1>' || replace(new.name,'&','&amp;') || '</h1>\n  <p>Welcome to your website. Edit this file from mPanel.</p>\n</main>\n<script src="script.js"></script>\n</body>\n</html>','text/html',true),
+   (new.user_id,new.id,'index.html','<!doctype html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n<title>' || replace(new.name,'&','&amp;') || '</title>\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n<main>\n  <h1>' || replace(new.name,'&','&amp;') || '</h1>\n  <p>Welcome to your website. Edit this file from mPanel.</p>\n</main>\n<script src="script.js"></script>\n</body>\n</html>','text/html',true),
    (new.user_id,new.id,'style.css','body{font-family:system-ui,sans-serif;margin:0;padding:48px;background:#f8fafc;color:#0f172a}main{max-width:900px;margin:auto;background:white;padding:40px;border-radius:20px;box-shadow:0 20px 50px rgba(15,23,42,.08)}h1{font-size:42px;margin-top:0}','text/css',false),
    (new.user_id,new.id,'script.js','document.documentElement.dataset.mpanel="preview";','text/javascript',false)
   on conflict(user_id,site_id,path) do nothing;
