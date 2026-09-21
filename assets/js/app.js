@@ -89,7 +89,7 @@ function renderSites(){
  '<div class="empty"><i data-lucide="globe-2"></i><h3>No websites</h3><p>Add a website to start.</p></div>')+'</div>';
  $("#add-site").onclick=()=>openSiteModal();
  $$(".manage-site").forEach(b=>b.onclick=()=>openWebsiteManager(b.dataset.id));
- $(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
+ $$(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
  $$(".delete-site").forEach(b=>b.onclick=()=>deleteSite(b.dataset.id));
 }
 
@@ -128,7 +128,7 @@ function renderManager(){
  '<div class="card" style="margin-bottom:18px"><div class="workspace-tabs"><button class="btn active" data-workspace="manager">Overview</button><button class="btn secondary" data-workspace="files"><i data-lucide="folder-code"></i>Files</button><button class="btn secondary" data-workspace="theme"><i data-lucide="palette"></i>Theme & Preview</button><button class="btn secondary" id="manager-site-settings"><i data-lucide="settings"></i>Site settings</button></div></div>'+
  '<div class="manager-cards"><div class="manager-card"><i data-lucide="folder-code"></i><h4>File Manager</h4><p>Create, edit, rename and remove text files stored for this website.</p><button class="btn secondary" style="margin-top:14px" data-workspace="files">Open files</button></div><div class="manager-card"><i data-lucide="palette"></i><h4>Theme Editor</h4><p>Edit HTML, CSS and JavaScript with an isolated live preview.</p><button class="btn secondary" style="margin-top:14px" data-workspace="theme">Open editor</button></div><div class="manager-card"><i data-lucide="history"></i><h4>Version safety</h4><p>Every saved file change creates a server-side previous version in Supabase.</p><button class="btn secondary" style="margin-top:14px" id="manager-history">View history</button></div></div>'+
  '<div class="grid two-col" style="margin-top:18px"><section class="card"><h3>Website status</h3><p class="muted">This workspace is connected to your mPanel database. Publishing to an external host requires a future GitHub/deployment connector.</p><div class="site-list" style="margin-top:14px"><div class="site-row"><span>Files</span><strong>'+state.files.length+'</strong></div><div class="site-row"><span>Last updated</span><strong>'+dt(state.files.reduce((a,b)=>new Date(a.updated_at)>new Date(b.updated_at)?a:b,{updated_at:s.updated_at}).updated_at)+'</strong></div></div></section><section class="card"><h3>Safe editing</h3><p class="muted">index.html is protected from deletion. CSS and JavaScript can be changed and previewed before you save.</p><span class="badge success">Supabase RLS enabled</span></section></div>';
- $("[data-workspace]").forEach(b=>b.onclick=()=>managerTab(b.dataset.workspace));
+ $$("[data-workspace]").forEach(b=>b.onclick=()=>managerTab(b.dataset.workspace));
  $("#manager-refresh").onclick=()=>ensureWorkspaceFiles(state.selectedSite);
  $("#manager-site-settings").onclick=()=>openSiteModal(s);
  $("#manager-history").onclick=()=>openFileHistory();
@@ -211,7 +211,7 @@ function renderTheme(){
  '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"")+'</div><div class="editor-actions"><span class="badge neutral">Live draft</span></div></div><textarea id="theme-editor" class="code-editor" spellcheck="false">'+esc(file?.content||"")+'</textarea></section>'+
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><button class="icon-btn" id="theme-refresh"><i data-lucide="refresh-cw"></i></button></div><iframe id="theme-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#theme-back").onclick=()=>showView("manager");
- $("#view-theme [data-theme-file]").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.path===b.dataset.themeFile)||null;renderTheme();updatePreview()});
+ $$("#view-theme [data-theme-file]").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.path===b.dataset.themeFile)||null;renderTheme();updatePreview()});
  $("#theme-save").onclick=saveThemeFile;
  $("#theme-editor").oninput=()=>{const draft=state.files.find(x=>x.id===state.selectedFile?.id);if(draft)draft.content=$("#theme-editor").value;updatePreview()};
  $("#theme-refresh").onclick=updatePreview;updatePreview();
@@ -287,7 +287,7 @@ $("#auth-form").onsubmit=async e=>{
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
-$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+$$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 
 async function handleAuth(){
