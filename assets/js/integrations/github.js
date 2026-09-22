@@ -127,6 +127,8 @@ async function openGitHubImport(){
 }
 function decodeBase64(v){const bin=atob(String(v).replace(/\s/g,""));const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));return new TextDecoder().decode(bytes)}
 function encodeBase64(v){const bytes=new TextEncoder().encode(v);let bin="";for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(bin)}
+function encodeBase64Bytes(bytes){let bin="";for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(bin)}
+
 function mime(path){const p=path.toLowerCase();return p.endsWith(".html")||p.endsWith(".htm")?"text/html":p.endsWith(".css")?"text/css":p.endsWith(".js")||p.endsWith(".mjs")?"text/javascript":p.endsWith(".json")?"application/json":p.endsWith(".svg")?"image/svg+xml":"text/plain"}
 async function pushSiteToGitHub(){
   const site=ctx.state.selectedSite,repo=ctx.state.github.repo;
@@ -134,14 +136,24 @@ async function pushSiteToGitHub(){
   if(!repo){ctx.toast("Choose a GitHub repository first.");ctx.showView("github");return}
   if(!confirm("Push the current mPanel files to "+repo.full_name+" on branch "+repo.branch+"?"))return;
   try{
-    const [owner,name]=repo.full_name.split("/"),files=ctx.state.files.filter(x=>isTextPath(x.path));
+    const [owner,name]=repo.full_name.split("/"),files=ctx.state.files.filter(x=>isTextPath(x.path)),assets=ctx.state.binaryFiles||[];
     for(const f of files){
       let sha;
       try{const old=await githubRequest("/repos/"+owner+"/"+name+"/contents/"+f.path+"?ref="+encodeURIComponent(repo.branch));sha=old.sha}catch{}
       const body={message:"mPanel: update "+f.path,content:encodeBase64(f.content),branch:repo.branch};if(sha)body.sha=sha;
       await githubRequest("/repos/"+owner+"/"+name+"/contents/"+f.path,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     }
-    ctx.toast("Pushed "+files.length+" files to GitHub","success");
+    for(const asset of assets){
+      const downloaded=await ctx.supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);
+      if(downloaded.error)throw downloaded.error;
+      const bytes=new Uint8Array(await downloaded.data.arrayBuffer());
+      if(bytes.byteLength>100*1024*1024)throw new Error("GitHub asset exceeds the 100 MB file limit: "+asset.path);
+      let sha;
+      try{const old=await githubRequest("/repos/"+owner+"/"+name+"/contents/"+asset.path+"?ref="+encodeURIComponent(repo.branch));sha=old.sha}catch{}
+      const body={message:"mPanel: update "+asset.path,content:encodeBase64Bytes(bytes),branch:repo.branch};if(sha)body.sha=sha;
+      await githubRequest("/repos/"+owner+"/"+name+"/contents/"+asset.path,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    }
+    ctx.toast("Pushed "+(files.length+assets.length)+" files/assets to GitHub","success");
   }catch(e){ctx.toast("GitHub push failed: "+e.message)}
 }
 async function loadGitHubIntegration(){
@@ -167,6 +179,7 @@ async function publishGeneratedSite(files,message="mPanel: publish website"){
   const parent=ref.object.sha;
   const commit=await githubRequest("/repos/"+owner+"/"+name+"/git/commits/"+parent);
   const generated=files.filter(f=>isTextPath(f.path));
+  const binaryAssets=ctx.state.binaryFiles||[];
   const manifestPath=".mpanel-manifest.json";
   const previous=[];
   try{
@@ -175,13 +188,21 @@ async function publishGeneratedSite(files,message="mPanel: publish website"){
     const parsed=JSON.parse(raw);
     if(Array.isArray(parsed.paths))previous.push(...parsed.paths.filter(Boolean));
   }catch{}
-  const currentPaths=generated.map(f=>f.path).filter(Boolean);
+  const currentPaths=generated.map(f=>f.path).filter(Boolean).concat(binaryAssets.map(f=>f.path).filter(Boolean));
   const manifest={version:1,managed_by:"mPanel",generated_at:new Date().toISOString(),paths:currentPaths};
   generated.push({path:manifestPath,content:JSON.stringify(manifest,null,2),mime_type:"application/json"});
   const entries=[];
   for(const f of generated){
     const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:encodeBase64(f.content),encoding:"base64"})});
     entries.push({path:f.path,mode:"100644",type:"blob",sha:blob.sha});
+  }
+  for(const asset of binaryAssets){
+    const downloaded=await ctx.supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);
+    if(downloaded.error)throw downloaded.error;
+    const bytes=new Uint8Array(await downloaded.data.arrayBuffer());
+    if(bytes.byteLength>100*1024*1024)throw new Error("GitHub asset exceeds the 100 MB file limit: "+asset.path);
+    const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:encodeBase64Bytes(bytes),encoding:"base64"})});
+    entries.push({path:asset.path,mode:"100644",type:"blob",sha:blob.sha});
   }
   const stale=previous.filter(p=>!currentPaths.includes(p)&&p!==manifestPath);
   for(const p of stale)entries.push({path:p,mode:"100644",type:"blob",sha:null});
