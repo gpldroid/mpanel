@@ -8,7 +8,7 @@ let renderBuilder=()=>{},initBuilder=()=>{};
 
 async function loadFeatureModules(){
   const modules=[
-    ["GitHub",()=>import("./integrations/github.js")],
+    ["GitHub",()=>import("./integrations/github.js?v=20260922-003")],
     ["Design",()=>import("./design/design.js")],
     ["Builder",()=>import("./builder.js")],
     ["Analytics",()=>import("./analytics.js")],
