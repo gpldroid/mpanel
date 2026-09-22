@@ -45,6 +45,20 @@ async function renameBinaryAsset(asset,newPath){
  if(ctx.reloadSiteFiles)await ctx.reloadSiteFiles();
  return r.data;
 }
+async function replaceBinaryAsset(asset,file){
+ const site=ctx.state.selectedSite;if(!site||!asset||!file)throw new Error("Select an asset and replacement file.");
+ const bytes=new Uint8Array(await file.arrayBuffer());
+ if(bytes.byteLength>MAX_ARCHIVE_FILE)throw new Error("File too large: "+asset.path+" (max 50 MB)");
+ const bucket=asset.storage_bucket||"mpanel-projects";
+ const type=file.type||mime(asset.path);
+ const upload=await ctx.supabase.storage.from(bucket).upload(asset.storage_object_path,new Blob([bytes],{type}),{upsert:true,contentType:type});
+ if(upload.error)throw upload.error;
+ const r=await ctx.supabase.from("site_binary_files").update({mime_type:type,size_bytes:bytes.byteLength,updated_at:new Date().toISOString()}).eq("id",asset.id).select().single();
+ if(r.error)throw r.error;
+ await loadBinaryRows();
+ if(ctx.reloadSiteFiles)await ctx.reloadSiteFiles();
+ return r.data;
+}
 async function deleteBinaryAsset(asset){
  const site=ctx.state.selectedSite;if(!site||!asset)throw new Error("Select an asset first.");
  const removed=await ctx.supabase.storage.from(asset.storage_bucket||"mpanel-projects").remove([asset.storage_object_path]);
@@ -57,4 +71,4 @@ async function deleteBinaryAsset(asset){
 }
 function renderWorkspaceIO(){const bar=document.querySelector("#view-files .workspace-head .workspace-actions");if(!bar||bar.querySelector("#workspace-io"))return;const b=document.createElement("button");b.className="btn secondary";b.id="workspace-io";b.innerHTML='<i data-lucide="archive"></i>Import / Export';b.onclick=openIO;bar.insertBefore(b,bar.querySelector("#new-file"));ctx.icons()}
 function initWorkspaceIO(c){ctx=c;ctx.state.binaryFiles=ctx.state.binaryFiles||[]}
-export {initWorkspaceIO,renderWorkspaceIO,openIO,importLocalFile,importFromUrl,exportProject,exportBackup,renameBinaryAsset,deleteBinaryAsset};
+export {initWorkspaceIO,renderWorkspaceIO,openIO,importLocalFile,importFromUrl,exportProject,exportBackup,renameBinaryAsset,replaceBinaryAsset,deleteBinaryAsset};
