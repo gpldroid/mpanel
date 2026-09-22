@@ -9,7 +9,7 @@ let renderWorkspaceIO=()=>{},initWorkspaceIO=()=>{},openWorkspaceIO=()=>{};
 
 async function loadFeatureModules(){
   const modules=[
-    ["GitHub",()=>import("./integrations/github.js?v=20260922-003")],
+    ["GitHub",()=>import("./integrations/github.js?v=20260922-004")],
     ["Design",()=>import("./design/design.js")],
     ["Builder",()=>import("./builder.js")],
     ["Analytics",()=>import("./analytics.js")],
