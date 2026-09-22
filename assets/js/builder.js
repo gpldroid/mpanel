@@ -156,8 +156,10 @@ export function validateBuild(state){
 export function buildSiteFiles(state){
  const files=[],published=(state.posts||[]).filter(p=>p.status==="published"),pages=(state.pages||[]).filter(p=>p.status==="published");
  const homeFallback='<section><h1>'+esc(state.siteSeo?.site_title||state.selectedSite?.name||"Website")+'</h1><p>'+esc(state.siteSeo?.meta_description||state.selectedSite?.description||"")+'</p><div class="post-list">'+published.slice(0,10).map(p=>'<article class="post-card"><h2><a href="'+esc(href("posts/"+slug(p.slug)+".html","index.html"))+'">'+esc(p.title)+'</a></h2><p>'+esc(p.excerpt||p.meta_description||"")+'</p></article>').join("")+'</div></section>';
- const home=renderTemplateContent(state,"site",homeFallback,"index.html");
- files.push({path:"index.html",content:shell(state,state.siteSeo?.site_title||state.selectedSite?.name||"Website",state.siteSeo?.meta_description||"",home,"index.html"),mime_type:"text/html"});
+ const maintenance=state.adminSettings?.maintenance_mode===true;
+ const maintenanceContent="<section style=\"max-width:760px;margin:15vh auto;padding:40px;text-align:center\"><h1>"+esc(state.selectedSite?.name||"Website")+"</h1><h2>Maintenance in progress</h2><p>"+esc(state.adminSettings?.maintenance_message||"This website is temporarily unavailable for maintenance.")+"</p></section>";
+ const home=maintenance?maintenanceContent:renderTemplateContent(state,"site",homeFallback,"index.html");
+ files.push({path:"index.html",content:shell(state,state.siteSeo?.site_title||state.selectedSite?.name||"Website",maintenance?"Maintenance":state.siteSeo?.meta_description||"",home,"index.html"),mime_type:"text/html"});
  files.push({path:"style.css",content:baseCss(theme(state)),mime_type:"text/css"});
  for(const p of published){
   const current="posts/"+slug(p.slug)+".html";
