@@ -110,29 +110,46 @@ export function validateBuild(state){
  if(seo.canonical_base){
   try{new URL(seo.canonical_base)}catch{errors.push("Canonical base URL is invalid.")}
  }
- const seen=new Set();
+ const postSeen=new Set(),pageSeen=new Set(),routeSeen=new Map();
  for(const p of state.posts||[]){
+  if(p.status==="scheduled"){
+   if(!p.scheduled_at)errors.push("A scheduled post is missing its scheduled date.");
+   else if(new Date(p.scheduled_at).getTime()<=Date.now())warnings.push("A scheduled post is due and will be published when the scheduler/RPC runs: "+(p.title||"Untitled"));
+  }
   if(p.status!=="published")continue;
   const key=slug(p.slug||p.title);
   if(!key)errors.push("A published post has an empty slug.");
-  if(seen.has("post:"+key))errors.push("Duplicate published post slug: "+key);
-  seen.add("post:"+key);
+  if(postSeen.has(key))errors.push("Duplicate published post slug: "+key);
+  postSeen.add(key);
+  const route="/posts/"+key+".html";
+  if(routeSeen.has(route))errors.push("Duplicate generated route: "+route);
+  routeSeen.set(route,"post");
   if(!String(p.title||"").trim())errors.push("A published post is missing its title.");
+  if(!String(p.content||"").trim())warnings.push("A published post has no HTML content: "+key);
+  if(!String(p.meta_title||p.title||"").trim())warnings.push("A published post is missing an SEO title: "+key);
+  if(!String(p.meta_description||p.excerpt||"").trim())warnings.push("A published post is missing a meta description: "+key);
   if(String(p.meta_description||p.excerpt||"").length>160)warnings.push("Post meta description exceeds 160 characters: "+key);
  }
- const pageSeen=new Set();
  for(const p of state.pages||[]){
   if(p.status!=="published")continue;
   const key=slug(p.slug||p.title);
   if(!key)errors.push("A published page has an empty slug.");
   if(pageSeen.has(key))errors.push("Duplicate published page slug: "+key);
   pageSeen.add(key);
+  const route="/pages/"+key+".html";
+  if(routeSeen.has(route))errors.push("Duplicate generated route: "+route);
+  routeSeen.set(route,"page");
   if(!String(p.title||"").trim())errors.push("A published page is missing its title.");
+  if(!String(p.content||"").trim())warnings.push("A published page has no HTML content: "+key);
+  if(!String(p.meta_title||p.title||"").trim())warnings.push("A published page is missing an SEO title: "+key);
+  if(!String(p.meta_description||"").trim())warnings.push("A published page is missing a meta description: "+key);
   if(String(p.meta_description||"").length>160)warnings.push("Page meta description exceeds 160 characters: "+key);
  }
- const files=state.builderBlocks||[];
- if(files.some(b=>b.enabled&&b.block_type==="image"&&b.content&&!b.content.url))warnings.push("An enabled image builder block has no image URL.");
+ const blocks=state.builderBlocks||[];
+ if(blocks.some(b=>b.enabled&&b.block_type==="image"&&b.content&&!String(b.content.url||"").trim()))warnings.push("An enabled image builder block has no image URL.");
+ if(blocks.some(b=>b.enabled&&b.block_type==="html"&&String(b.content?.html||"").length>200000))errors.push("An enabled HTML builder block is too large for a safe build.");
  if(state.siteSeo?.sitemap_enabled!==false&&!seo.canonical_base)warnings.push("Sitemap generation is enabled but canonical base is empty.");
+ if(!state.builderTemplates?.length)warnings.push("No builder template is configured; the default generated site shell will be used.");
  return {ok:errors.length===0,errors,warnings};
 }
 
