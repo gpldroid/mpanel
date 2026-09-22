@@ -11,6 +11,26 @@ const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,sel
 window.__mPanelState=state;
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
+const SITE_CONTEXT_KEY="mpanel:selected-site";
+function renderSiteContext(){
+ const select=$("#site-context");
+ if(!select)return;
+ select.innerHTML='<option value="">No website selected</option>'+state.sites.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join("");
+ select.value=state.selectedSite?.id||"";
+}
+async function setSelectedSite(id){
+ const next=state.sites.find(x=>x.id===id)||null;
+ state.selectedSite=next;
+ if(next)localStorage.setItem(SITE_CONTEXT_KEY,next.id);else localStorage.removeItem(SITE_CONTEXT_KEY);
+ state.selectedFile=null;
+ state.design={layout:[],widgets:[],menus:[],menuItems:[],theme:null,loadedSiteId:null};
+ state.activeThemePresetId=null;
+ await loadSiteFiles();
+ await loadCms();
+ await loadGitHubIntegration();
+ renderAll();
+ showView(state.view||"dashboard");
+}
 const each=(selector,callback)=>{
   const nodes=document.querySelectorAll(selector);
   for(let i=0;i<nodes.length;i++)callback(nodes[i],i,nodes);
@@ -85,9 +105,9 @@ async function loadData(){
   supabase.from("deployments").select("*").eq("site_id",state.selectedSite?.id||"00000000-0000-0000-0000-000000000000").order("created_at",{ascending:false}).limit(10)
  ]);
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error)); if(d.error&&d.error.code!=="PGRST116")toast(authError(d.error)); if(e.error)toast(authError(e.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle()]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;const [bt,bb,rr,tp]=await Promise.all([supabase.from("builder_templates").select("*").eq("site_id",siteId).order("created_at",{ascending:true}),supabase.from("builder_blocks").select("*").eq("site_id",siteId).order("position",{ascending:true}),supabase.from("seo_redirects").select("*").eq("site_id",siteId).order("created_at",{ascending:false}),supabase.from("theme_presets").select("*").eq("user_id",state.user.id).order("name")]);state.builderTemplates=bt.data||[];state.builderBlocks=bb.data||[];state.redirects=rr.data||[];state.themePresets=tp.data||[];}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;}await loadCms();await loadGitHubIntegration();renderAll();
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];const savedSiteId=localStorage.getItem(SITE_CONTEXT_KEY);if(savedSiteId&&state.sites.some(x=>x.id===savedSiteId))state.selectedSite=state.sites.find(x=>x.id===savedSiteId);else if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;if(state.selectedSite)localStorage.setItem(SITE_CONTEXT_KEY,state.selectedSite.id);else localStorage.removeItem(SITE_CONTEXT_KEY);const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle()]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;const [bt,bb,rr,tp]=await Promise.all([supabase.from("builder_templates").select("*").eq("site_id",siteId).order("created_at",{ascending:true}),supabase.from("builder_blocks").select("*").eq("site_id",siteId).order("position",{ascending:true}),supabase.from("seo_redirects").select("*").eq("site_id",siteId).order("created_at",{ascending:false}),supabase.from("theme_presets").select("*").eq("user_id",state.user.id).order("name")]);state.builderTemplates=bt.data||[];state.builderBlocks=bb.data||[];state.redirects=rr.data||[];state.themePresets=tp.data||[];}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;}await loadCms();await loadGitHubIntegration();renderAll();
 }
-function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderBuilder();renderPublishing();renderAnalytics();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
+function renderAll(){renderSiteContext();renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderBuilder();renderPublishing();renderAnalytics();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
 function renderDashboard(){
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
@@ -463,7 +483,7 @@ function setAuthScreen(visible){
 }
 function resetSessionState(){
   state.user=null;
-  state.sites=[];state.domains=[];state.seo=[];state.files=[];state.selectedSite=null;state.selectedFile=null;
+  state.sites=[];state.domains=[];state.seo=[];state.files=[];state.selectedSite=null;state.selectedFile=null;localStorage.removeItem(SITE_CONTEXT_KEY);
   state.posts=[];state.pages=[];state.categories=[];state.tags=[];state.siteSeo=null;state.revisions=[];state.deployments=[];
   state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;
   state.github={connected:false,login:null,token:null,repo:null};
@@ -525,6 +545,7 @@ $("#auth-form").onsubmit=async e=>{
 $("#logout-btn").onclick=signOut;
 $("#account-logout").onclick=signOut;
 $("#account-settings").onclick=()=>{closeAccountMenu();showView("settings")};
+$("#site-context").onchange=async e=>{try{await setSelectedSite(e.target.value)}catch(error){toast(authError(error))}};
 $("#theme-btn").onclick=toggleTheme;
 $("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");
 $("#profile-btn").onclick=(event)=>{event.stopPropagation();toggleAccountMenu()};
