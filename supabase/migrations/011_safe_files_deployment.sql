@@ -44,3 +44,11 @@ insert into public.system_checks(user_id,site_id,check_key,status,message)
 select s.user_id,s.id,'deployment_verification','pending','Deployment verification not checked yet'
 from public.sites s
 on conflict(site_id,check_key) do nothing;
+insert into public.builder_templates(user_id,site_id,name,slug,template_type,is_default,settings)
+select s.user_id,s.id,'Archive','archive-template','archive',true,'{"seo":{"noindex":false}}'::jsonb
+from public.sites s
+on conflict(site_id,slug) do nothing;
+insert into public.builder_templates(user_id,site_id,name,slug,template_type,is_default,settings)
+select s.user_id,s.id,'404 Page','404-template','404',true,'{"seo":{"noindex":true}}'::jsonb
+from public.sites s
+on conflict(site_id,slug) do nothing;
