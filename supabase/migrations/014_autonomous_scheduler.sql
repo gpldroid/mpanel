@@ -117,7 +117,7 @@ begin
    perform cron.schedule(
      'mpanel-scheduled-posts',
      '*/5 * * * *',
-     $$select public.run_scheduled_publishing();$$
+     $job$select public.run_scheduled_publishing();$job$
    );
  end if;
 exception when others then
