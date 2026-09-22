@@ -36,7 +36,7 @@ async function loadFeatureModules(){
   if(failures.length)toast("Optional modules unavailable: "+failures.join(", ")+". Other modules remain available.","error");
   return failures;
 }
-const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
+const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim(),{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:"pkce"}});
 const state={user:null,sites:[],domains:[],seo:[],files:[],binaryFiles:[],adminSettings:null,permissions:null,selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
 window.__mPanelState=state;
 const $=s=>document.querySelector(s);
@@ -90,6 +90,9 @@ function authError(err){
  const msg=String(err?.message||err||"Unknown error");
  if(/failed to fetch|networkerror|load failed/i.test(msg)) return "Unable to connect to Supabase. Check your Supabase URL, publishable key, project status, and browser network connection.";
  if(/invalid api key|apikey/i.test(msg)) return "Supabase API key is invalid. Use the project's Publishable key in assets/js/config.js.";
+ if(/email not confirmed|email_not_confirmed/i.test(msg)) return "Email is not confirmed. Check your inbox for the Supabase confirmation email, then sign in again.";
+ if(/invalid login credentials|invalid credentials/i.test(msg)) return "Invalid email or password.";
+ if(/too many requests|rate limit/i.test(msg)) return "Too many login attempts. Wait a moment and try again.";
  return msg;
 }
 function setConnectionState(type,title,detail){
@@ -849,7 +852,7 @@ $("#auth-form").onsubmit=async e=>{
    :await supabase.auth.signInWithPassword({email,password});
   if(r.error){toast(authError(r.error));return}
   if(signUp&&!r.data.session){toast("Account created. Check your email to confirm the account.","success");return}
-  await handleAuth();
+  await handleAuth(r.data?.session||null);
  }catch(error){toast(authError(error))}
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
@@ -880,12 +883,11 @@ async function initializeFeatureModules(){
 }
 
 let authBooting=false;
-async function handleAuth(){
+async function handleAuth(providedSession=null){
  if(authBooting)return;
  authBooting=true;
  try{
-  const{data:{session},error}=await supabase.auth.getSession();
-  if(error)throw error;
+  const session=providedSession||((await supabase.auth.getSession()).data?.session||null);
   if(session){
    state.user=session.user;
    if(cleanAuthHash()) history.replaceState({},document.title,getAuthRedirectUrl());
@@ -893,7 +895,6 @@ async function handleAuth(){
    $("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();
    $("#account-email").textContent=session.user.email||"Account";
    showView("dashboard");
-   // Never block the login transition on CMS/optional data. The dashboard is usable immediately.
    loadData().catch(dataError=>{
     console.error("[mPanel data boot error]",dataError);
     toast("Dashboard loaded, but some data could not be loaded: "+authError(dataError));
@@ -915,10 +916,12 @@ async function handleAuth(){
 supabase.auth.onAuthStateChange((event,session)=>{
  setTimeout(()=>{
   if(event==="SIGNED_OUT"){resetSessionState();setAuthScreen(true);return}
-  if(session&&!state.user)handleAuth();
+  if((event==="SIGNED_IN"||event==="TOKEN_REFRESHED"||event==="INITIAL_SESSION")&&session){
+   handleAuth(session);
+  }
  },0);
 });
-// Authentication must never wait for optional CMS integrations.
+// Resolve any existing Supabase session immediately; OAuth callback sessions are handled by INITIAL_SESSION/SIGNED_IN.
 handleAuth().catch(error=>toast(authError(error)));
 icons();
 initializeFeatureModules().catch(error=>console.error("[mPanel feature boot]",error));
