@@ -83,7 +83,7 @@ async function loadData(){
   supabase.from("deployments").select("*").eq("site_id",state.selectedSite?.id||"00000000-0000-0000-0000-000000000000").order("created_at",{ascending:false}).limit(10)
  ]);
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error)); if(d.error&&d.error.code!=="PGRST116")toast(authError(d.error)); if(e.error)toast(authError(e.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];state.siteSeo=d.data||null;state.deployments=e.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;await loadCms();renderAll();
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10)]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];}else{state.siteSeo=null;state.deployments=[];}await loadCms();renderAll();
 }
 function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderPublishing();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
