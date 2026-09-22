@@ -51,20 +51,30 @@ async function openGitHubImport(){
   if(!site){ctx.showView("sites");ctx.toast("Select a website first.");return}
   try{
     const repos=await loadRepos();
+    if(!repos.length)throw new Error("No GitHub repositories are available for this account.");
+    const savedRepo=ctx.state.github.repo?.full_name||"";
+    const initialRepo=repos.find(r=>r.full_name===savedRepo)||repos[0];
+    ctx.state.github.repo=ctx.state.github.repo||{full_name:initialRepo.full_name,branch:initialRepo.default_branch||"main"};
+    ctx.state.github.repo.full_name=initialRepo.full_name;
+    ctx.state.github.repo.branch=ctx.state.github.repo.branch||initialRepo.default_branch||"main";
     ctx.openModal('<div class="modal-backdrop"><div class="modal github-modal"><div class="modal-head"><div><h3>GitHub → Import project</h3><p class="muted">Connect GitHub, choose a repository, clone it, then select the files to import.</p></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><div class="github-import-steps"><span class="badge success">GitHub</span><span>→</span><span class="badge neutral">Connect GitHub</span><span>→</span><span class="badge neutral">Repository</span><span>→</span><span class="badge neutral">Import project</span><span>→</span><span class="badge neutral">Scan repository</span><span>→</span><span class="badge neutral">Clone repository</span><span>→</span><span class="badge neutral">Select files</span><span>→</span><span class="badge neutral">Import clone selected</span></div><form id="github-import-form"><label>Repository<select name="repo">'+repoOptions(repos,ctx.state.github.repo?.full_name||"")+'</select></label><label style="margin-top:14px">Branch<input name="branch" value="" placeholder="default branch"></label><div class="form-grid" style="margin-top:14px"><label>Search cloned files<input name="search" placeholder="index.html, css, js…"></label><label>Import mode<select name="mode"><option value="merge">Merge — keep existing files</option><option value="replace">Replace selected files</option></select></label></div><div id="github-import-summary" class="github-import-info"><span class="badge neutral">1. Scan the repository</span></div><div id="github-import-files" class="file-list" style="max-height:260px;margin-top:12px"><div class="empty">No repository cloned yet.</div></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button type="button" class="btn secondary" id="scan-github">Scan repository</button><button type="button" class="btn secondary" id="clone-github" disabled>Clone repository</button><button type="submit" class="btn primary" id="import-clone-selected" disabled>Import clone selected</button></div></form></div></div>');
     ctx.icons();
     const form=document.querySelector("#github-import-form"),select=form.elements.repo,branch=form.elements.branch,search=form.elements.search,mode=form.elements.mode;
     const filesBox=document.querySelector("#github-import-files"),summary=document.querySelector("#github-import-summary");
     const scanBtn=document.querySelector("#scan-github"),cloneBtn=document.querySelector("#clone-github"),importBtn=document.querySelector("#import-clone-selected");
+    if(select.value){setBranch();}
     let entries=[],clonedEntries=[],cloned=false;
-    const setBranch=()=>{const o=select.options[select.selectedIndex];branch.value=o?.dataset.default||"main";cloned=false;clonedEntries=[];cloneBtn.disabled=true;importBtn.disabled=true;filesBox.innerHTML='<div class="empty">Repository changed. Scan it again.</div>'};
+    const setBranch=()=>{const o=select.options[select.selectedIndex];const saved=ctx.state.github.repo;branch.value=o?.dataset.default||(saved?.full_name===select.value?saved.branch:"")||"main";cloned=false;clonedEntries=[];cloneBtn.disabled=true;importBtn.disabled=true;filesBox.innerHTML='<div class="empty">Repository changed. Scan it again.</div>'};
     const renderEntries=()=>{
       const q=search.value.trim().toLowerCase(),shown=clonedEntries.filter(x=>!q||x.path.toLowerCase().includes(q));
       summary.innerHTML=cloned?'<span class="badge success">Repository cloned</span><span class="badge success">'+shown.length+' selectable text files</span><span class="badge neutral">Max 1 MB/file</span><span class="badge neutral">'+(mode.value==="merge"?"Existing files are preserved":"Selected files overwrite matching paths")+'</span>':'<span class="badge neutral">'+entries.length+' files found</span><span class="badge warning">Clone repository before selecting files</span>';
       filesBox.innerHTML=cloned?(shown.length?shown.slice(0,400).map(x=>'<label class="check"><input type="checkbox" name="path" value="'+esc(x.path)+'" checked><span><strong>'+esc(x.path)+'</strong><small class="muted"> '+Math.round((x.size||0)/1024)+' KB</small></span></label>').join(""):'<div class="empty">No matching cloned files.</div>'):'<div class="empty">No repository cloned yet.</div>';
     };
     const scan=async()=>{
-      const full=select.value,br=branch.value.trim()||"main";if(!full)throw new Error("Select a repository.");
+      const saved=ctx.state.github.repo?.full_name||"";
+      const full=select.value||saved,br=branch.value.trim()||ctx.state.github.repo?.branch||"main";
+      if(!full)throw new Error("Select a repository.");
+      if(select.value!==full){select.value=full;setBranch()}
       const [owner,name]=full.split("/");
       const tree=await githubRequest("/repos/"+owner+"/"+name+"/git/trees/"+encodeURIComponent(br)+"?recursive=1");
       entries=(tree.tree||[]).filter(x=>x.type==="blob"&&isTextPath(x.path)&&x.size<=1024*1024);
@@ -73,6 +83,7 @@ async function openGitHubImport(){
       filesBox.innerHTML='<div class="empty">Scan complete. Click "Clone repository" to load the repository files.</div>';
     };
     const clone=async()=>{
+      if(!select.value&&ctx.state.github.repo?.full_name){select.value=ctx.state.github.repo.full_name;setBranch()}
       if(!entries.length)await scan();
       if(!entries.length)throw new Error("No supported text files were found in the repository.");
       const full=select.value,br=branch.value.trim()||"main";const [owner,name]=full.split("/");
