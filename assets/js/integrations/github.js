@@ -62,9 +62,8 @@ async function openGitHubImport(){
     const form=document.querySelector("#github-import-form"),select=form.elements.repo,branch=form.elements.branch,search=form.elements.search,mode=form.elements.mode;
     const filesBox=document.querySelector("#github-import-files"),summary=document.querySelector("#github-import-summary");
     const scanBtn=document.querySelector("#scan-github"),cloneBtn=document.querySelector("#clone-github"),importBtn=document.querySelector("#import-clone-selected");
-    if(select.value){setBranch();}
     let entries=[],clonedEntries=[],cloned=false;
-    const setBranch=()=>{const o=select.options[select.selectedIndex];const saved=ctx.state.github.repo;branch.value=o?.dataset.default||(saved?.full_name===select.value?saved.branch:"")||"main";cloned=false;clonedEntries=[];cloneBtn.disabled=true;importBtn.disabled=true;filesBox.innerHTML='<div class="empty">Repository changed. Scan it again.</div>'};
+    const setBranch=()=>{const o=select.options[select.selectedIndex];const saved=ctx.state.github.repo;branch.value=o?.dataset.default||(saved?.full_name===select.value?saved.branch:"")||"main";entries=[];cloned=false;clonedEntries=[];cloneBtn.disabled=true;importBtn.disabled=true;filesBox.innerHTML='<div class="empty">Repository changed. Scan it again.</div>'};
     const renderEntries=()=>{
       const q=search.value.trim().toLowerCase(),shown=clonedEntries.filter(x=>!q||x.path.toLowerCase().includes(q));
       summary.innerHTML=cloned?'<span class="badge success">Repository cloned</span><span class="badge success">'+shown.length+' selectable text files</span><span class="badge neutral">Max 1 MB/file</span><span class="badge neutral">'+(mode.value==="merge"?"Existing files are preserved":"Selected files overwrite matching paths")+'</span>':'<span class="badge neutral">'+entries.length+' files found</span><span class="badge warning">Clone repository before selecting files</span>';
@@ -117,7 +116,11 @@ async function openGitHubImport(){
       }
       ctx.state.github.repo={full_name:full,branch:br};
       await ctx.supabase.from("sites").update({updated_at:new Date().toISOString()}).eq("id",site.id);
-      ctx.closeModal();ctx.toast("Imported clone: "+imported+" files"+(skipped?" · "+skipped+" protected files skipped":""),"success");await ctx.reloadSiteFiles();ctx.renderAll();ctx.showView("files");
+      await ctx.reloadSiteFiles();
+      ctx.state.selectedFile=ctx.state.files.find(x=>x.path==="index.html")||ctx.state.files.find(x=>selected.includes(x.path))||ctx.state.files[0]||null;
+      ctx.closeModal();
+      ctx.toast("Imported clone: "+imported+" files"+(skipped?" · "+skipped+" protected files skipped":"")+" — files are now copied into this website workspace and can be edited.","success");
+      ctx.renderAll();ctx.showView("files");
     };
   }catch(e){ctx.toast("GitHub import failed: "+e.message)}
 }
