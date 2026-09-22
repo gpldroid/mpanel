@@ -492,7 +492,17 @@ async function saveThemeFile(){
  toast("Theme changes saved","success");renderTheme();renderManager();updatePreview();
 }
 
-async function deleteSite(id){if(!confirm("Delete this website and related data?"))return;const{error}=await supabase.from("sites").delete().eq("id",id);if(error)toast(authError(error));else{toast("Website deleted","success");await loadData()}}
+async function deleteSite(id){
+ if(!confirm("Delete this website and related data?"))return;
+ try{
+  const binaries=await supabase.from("site_binary_files").select("storage_bucket,storage_object_path").eq("site_id",id);
+  if(binaries.error&&binaries.error.code!=="42P01")throw binaries.error;
+  for(const b of binaries.data||[]){const removed=await supabase.storage.from(b.storage_bucket||"mpanel-projects").remove([b.storage_object_path]);if(removed.error)throw removed.error}
+  const {error}=await supabase.from("sites").delete().eq("id",id);if(error)throw error;
+  if(state.selectedSite?.id===id){state.selectedSite=null;state.selectedBinary=null;state.previewPagePath="index.html"}
+  toast("Website deleted","success");await loadData();
+ }catch(error){toast("Website deletion failed: "+authError(error))}
+}
 function openSiteModal(site=null){
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>'+(site?"Edit website":"Add website")+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="site-form" class="form-grid"><label>Name<input name="name" required value="'+esc(site?.name||"")+'" placeholder="My Website"></label><label>URL<input name="url" type="url" required value="'+esc(site?.url||"")+'" placeholder="https://example.com"></label><label class="full-field">Description<textarea name="description" rows="4">'+esc(site?.description||"")+'</textarea></label><label>Status<select name="status"><option value="active" '+(site?.status==="active"?"selected":"")+' >Active</option><option value="paused" '+(site?.status==="paused"?"selected":"")+' >Paused</option></select></label><div></div><div class="modal-actions full-field"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Save website</button></div></form></div></div>';
  icons();$("#close-modal").onclick=closeModal;$("#cancel-modal").onclick=closeModal;
