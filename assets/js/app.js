@@ -5,7 +5,7 @@ const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON
 const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard"};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-const icons=()=>window.lucide?.createIcons();
+function icons(){try{if(window.lucide&&typeof window.lucide.createIcons==="function")window.lucide.createIcons()}catch(error){console.warn("mPanel icon rendering skipped:",error)}}
 const dt=v=>v?new Date(v).toLocaleDateString():"—";
 
 function getAuthRedirectUrl(){
