@@ -8,7 +8,7 @@ import { renderBuilder, initBuilder } from "./builder-ui.js";
 import { publishGeneratedSite, loadGitHubIntegration } from "./integrations/github.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
-const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[]};
+const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
 window.__mPanelState=state;
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -86,7 +86,7 @@ async function loadData(){
   supabase.from("deployments").select("*").eq("site_id",state.selectedSite?.id||"00000000-0000-0000-0000-000000000000").order("created_at",{ascending:false}).limit(10)
  ]);
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error)); if(d.error&&d.error.code!=="PGRST116")toast(authError(d.error)); if(e.error)toast(authError(e.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle()]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;const [bt,bb,rr]=await Promise.all([supabase.from("builder_templates").select("*").eq("site_id",siteId).order("created_at",{ascending:true}),supabase.from("builder_blocks").select("*").eq("site_id",siteId).order("position",{ascending:true}),supabase.from("seo_redirects").select("*").eq("site_id",siteId).order("created_at",{ascending:false})]);state.builderTemplates=bt.data||[];state.builderBlocks=bb.data||[];state.redirects=rr.data||[];}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];}await loadCms();await loadGitHubIntegration();renderAll();
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle()]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;const [bt,bb,rr]=await Promise.all([supabase.from("builder_templates").select("*").eq("site_id",siteId).order("created_at",{ascending:true}),supabase.from("builder_blocks").select("*").eq("site_id",siteId).order("position",{ascending:true}),supabase.from("seo_redirects").select("*").eq("site_id",siteId).order("created_at",{ascending:false}),supabase.from("theme_presets").select("*").eq("user_id",state.user.id).order("name")]);state.builderTemplates=bt.data||[];state.builderBlocks=bb.data||[];state.redirects=rr.data||[];state.themePresets=tp.data||[];}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;}await loadCms();await loadGitHubIntegration();renderAll();
 }
 function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderBuilder();renderPublishing();renderAnalytics();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
@@ -112,7 +112,7 @@ function renderSites(){
 
 async function ensureWorkspaceFiles(site){
  if(!site)return;
- const {data,error}=await supabase.from("site_files").select("*").eq("site_id",site.id).order("path");
+ const {data,error}=await supabase.from("site_files").select("*").eq("site_id",site.id).is("deleted_at",null).order("path");
  if(error){toast(authError(error));return}
  if(!data?.length){
   const defaults=[
@@ -152,7 +152,7 @@ function renderManager(){
 }
 async function loadSiteFiles(){
  if(!state.selectedSite){state.files=[];return}
- const {data,error}=await supabase.from("site_files").select("*").eq("site_id",state.selectedSite.id).order("path");
+ const {data,error}=await supabase.from("site_files").select("*").eq("site_id",state.selectedSite.id).is("deleted_at",null).order("path");
  if(error){toast(authError(error));state.files=[]}else state.files=data||[];
 }
 function renderFiles(){
@@ -161,7 +161,7 @@ function renderFiles(){
  const file=state.selectedFile;
  $("#view-files").innerHTML='<div class="workspace-head"><div><span class="eyebrow">FILE MANAGER</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><p class="muted">Edit website source files safely with version snapshots.</p></div><div class="workspace-actions"><button class="btn secondary" id="files-back"><i data-lucide="arrow-left"></i>Overview</button><button class="btn secondary" id="github-file-import"><i data-lucide="github"></i>GitHub</button><button class="btn secondary" id="github-file-push"><i data-lucide="upload"></i>Push</button><button class="btn primary" id="new-file"><i data-lucide="file-plus-2"></i>New file</button></div></div>'+
  '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Website files</h3><span class="badge neutral">'+state.files.length+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+'</div></aside>'+
- '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
+ '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn secondary" id="recovery-files"><i data-lucide="archive-restore"></i>Recovery</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
  $("#github-file-import").onclick=()=>openGitHubImport();
@@ -170,20 +170,20 @@ function renderFiles(){
  each(".file-item",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
  $("#file-search").oninput=e=>{each(".file-item",b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
- $("#history-file")?.addEventListener("click",openFileHistory);
+ $("#history-file")?.addEventListener("click",openFileHistory);$("#recovery-files")?.addEventListener("click",openFileRecovery);
  $("#delete-file")?.addEventListener("click",deleteSelectedFile);
  $("#refresh-preview")?.addEventListener("click",updatePreview);
  $("#open-preview")?.addEventListener("click",()=>{const src=$("#workspace-preview")?.srcdoc;if(src)window.open(URL.createObjectURL(new Blob([src],{type:"text/html"})),"_blank","noopener")});
 }
 async function deleteSelectedFile(){
  if(!state.selectedFile||state.selectedFile.is_protected)return;
- if(!confirm("Delete "+state.selectedFile.path+"? This cannot be undone."))return;
- const id=state.selectedFile.id;
- const {error}=await supabase.from("site_files").delete().eq("id",id);
+ if(!confirm("Archive "+state.selectedFile.path+"? You can restore it later from file recovery."))return;
+ const id=state.selectedFile.id,path=state.selectedFile.path;
+ const {data,error}=await supabase.from("site_files").update({deleted_at:new Date().toISOString(),deleted_by:state.user.id,updated_at:new Date().toISOString()}).eq("id",id).select().single();
  if(error){toast(authError(error));return}
- await supabase.rpc("write_audit_log",{p_action:"delete_file",p_entity_type:"site_file",p_entity_id:id,p_details:{path:state.selectedFile.path,site_id:state.selectedFile.site_id}});
+ await supabase.rpc("write_audit_log",{p_action:"archive_file",p_entity_type:"site_file",p_entity_id:id,p_details:{path,site_id:state.selectedFile.site_id}});
  state.files=state.files.filter(x=>x.id!==id);state.selectedFile=state.files.find(x=>x.path==="index.html")||state.files[0]||null;
- toast("File deleted","success");renderFiles();renderTheme();renderManager();updatePreview();
+ toast("File archived safely","success");renderFiles();renderTheme();renderManager();updatePreview();
 }
 async function saveSelectedFile(){
  if(!state.selectedFile)return;
@@ -209,6 +209,15 @@ function openNewFileModal(){
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal file-modal"><div class="modal-head"><h3>New website file</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="new-file-form"><label>File path<input name="path" required pattern="[A-Za-z0-9_./-]+" placeholder="pages/about.html"></label><label style="margin-top:14px">Type<select name="mime"><option value="text/html">HTML</option><option value="text/css">CSS</option><option value="text/javascript">JavaScript</option><option value="text/plain">Text</option></select></label><label style="margin-top:14px">Initial content<textarea name="content" placeholder="Start writing…"></textarea></label><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Create file</button></div></form></div></div>';
  icons();$("#close-modal").onclick=closeModal;$("#cancel-modal").onclick=closeModal;
  $("#new-file-form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const path=f.get("path").trim().replace(/^\/+/,"");if(state.files.some(x=>x.path===path)){toast("A file with this path already exists.");return}const {data,error}=await supabase.from("site_files").insert({user_id:state.user.id,site_id:state.selectedSite.id,path,content:f.get("content"),mime_type:f.get("mime")}).select().single();if(error){toast(authError(error));return}state.files.push(data);state.files.sort((a,b)=>a.path.localeCompare(b.path));state.selectedFile=data;closeModal();renderFiles();renderTheme();updatePreview();toast("File created","success")};
+}
+async function openFileRecovery(){
+ const s=state.selectedSite;if(!s)return;
+ const r=await supabase.from("site_files").select("*").eq("site_id",s.id).not("deleted_at","is",null).order("deleted_at",{ascending:false});
+ if(r.error){toast(authError(r.error));return}
+ const rows=r.data||[];
+ $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><h3>File recovery</h3><p class="muted">Archived files remain recoverable until permanently removed by database policy.</p></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div>'+(rows.length?'<div class="site-list">'+rows.map(v=>'<div class="site-row"><div><strong>'+esc(v.path)+'</strong><small class="muted" style="display:block">Archived '+dt(v.deleted_at)+'</small></div><button class="btn secondary restore-file" data-id="'+v.id+'">Restore</button></div>').join("")+'</div>':'<div class="empty">No archived files.</div>')+'</div></div>';
+ icons();$("#close-modal").onclick=closeModal;
+ each(".restore-file",b=>b.onclick=async()=>{const v=rows.find(x=>x.id===b.dataset.id);if(!v)return;if(!confirm("Restore "+v.path+"?"))return;const q=await supabase.from("site_files").update({deleted_at:null,deleted_by:null,updated_at:new Date().toISOString()}).eq("id",v.id).select().single();if(q.error){toast(authError(q.error));return}await supabase.rpc("write_audit_log",{p_action:"restore_file",p_entity_type:"site_file",p_entity_id:v.id,p_details:{path:v.path,site_id:v.site_id}});closeModal();await loadSiteFiles();state.selectedFile=state.files.find(x=>x.path===v.path)||state.files[0]||null;renderFiles();renderTheme();updatePreview();toast("File restored","success")});
 }
 async function openFileHistory(){
  const file=state.selectedFile;
