@@ -710,7 +710,8 @@ $("#account-logout").onclick=signOut;
 $("#account-settings").onclick=()=>{closeAccountMenu();showView("settings")};
 $("#site-context").onchange=async e=>{try{await setSelectedSite(e.target.value)}catch(error){toast(authError(error))}};
 $("#theme-btn").onclick=toggleTheme;
-$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");\n$("#sidebar-close").onclick=()=>$("#sidebar").classList.remove("open");
+$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");
+$("#sidebar-close").onclick=()=>$("#sidebar").classList.remove("open");
 $("#profile-btn").onclick=(event)=>{event.stopPropagation();toggleAccountMenu()};
 document.addEventListener("click",event=>{if(!event.target.closest(".account-wrap"))closeAccountMenu()});
 async function initializeFeatureModules(){
