@@ -1,3 +1,4 @@
+create extension if not exists pgcrypto;
 -- mPanel 009: privacy-conscious first-party analytics
 create table if not exists public.site_analytics_settings (
   id uuid primary key default gen_random_uuid(),
