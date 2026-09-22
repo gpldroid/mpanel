@@ -215,7 +215,22 @@ function renderGitHub(state){
   document.querySelector("#github-refresh-repos")?.addEventListener("click",async()=>{try{await fillRepoSelect()}catch(e){ctx.toast(e.message)}});
   document.querySelector("#github-save-repo")?.addEventListener("click",async()=>{try{const sel=document.querySelector("#github-repo-select"),repoName=sel?.value,branch=document.querySelector("#github-branch")?.value.trim()||"main";if(!repoName)throw new Error("Select a repository.");await saveGitHubIntegration(repoName,branch);ctx.toast("GitHub repository saved","success");renderGitHub(ctx.state)}catch(e){ctx.toast("Save failed: "+e.message)}});
   document.querySelector("#github-publish-main")?.addEventListener("click",()=>ctx.publishWebsite?.());
-  async function fillRepoSelect(){const sel=document.querySelector("#github-repo-select");if(!sel)return;const repos=await loadRepos();sel.innerHTML='<option value="">Select repository</option>'+repoOptions(repos,ctx.state.github.repo?.full_name||"");if(ctx.state.github.repo)sel.value=ctx.state.github.repo.full_name}
+  async function fillRepoSelect(){
+    const sel=document.querySelector("#github-repo-select");
+    if(!sel)return;
+    const repos=await loadRepos();
+    if(!repos.length){sel.innerHTML='<option value="">No repositories available</option>';return}
+    const current=ctx.state.github.repo?.full_name||"";
+    const selected=repos.find(r=>r.full_name===current)||repos[0];
+    sel.innerHTML='<option value="">Select repository</option>'+repoOptions(repos,selected.full_name);
+    sel.value=selected.full_name;
+    const branch=document.querySelector("#github-branch");
+    const branchValue=ctx.state.github.repo?.full_name===selected.full_name&&ctx.state.github.repo?.branch?ctx.state.github.repo.branch:(selected.default_branch||"main");
+    if(branch)branch.value=branchValue;
+    ctx.state.github.repo={full_name:selected.full_name,branch:branchValue};
+    const box=document.querySelector(".github-repo-box");
+    if(box){const badge=box.querySelector(".badge");if(badge)badge.outerHTML='<span class="badge success">Selected: '+esc(selected.full_name)+' / '+esc(branchValue)+'</span>'}
+  }
   if(connected)fillRepoSelect().catch(e=>ctx.toast("Repository load failed: "+e.message));
 }
 function initGitHub(c){
