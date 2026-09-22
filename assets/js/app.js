@@ -490,11 +490,25 @@ async function handleAuth(){
   if(session){
    state.user=session.user;
    if(cleanAuthHash()) history.replaceState({},document.title,getAuthRedirectUrl());
-   $("#auth-view").classList.add("hidden");$("#app-view").classList.remove("hidden");$("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();await loadData();showView("dashboard")}
-  else{$("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden")}
+   $("#auth-view").classList.add("hidden");
+   $("#app-view").classList.remove("hidden");
+   $("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();
+   showView("dashboard");
+   try{
+    await loadData();
+   }catch(dataError){
+    console.error("[mPanel data boot error]",dataError);
+    toast("Dashboard loaded, but some data could not be loaded: "+authError(dataError));
+   }
+  }else{
+   state.user=null;
+   $("#auth-view").classList.remove("hidden");
+   $("#app-view").classList.add("hidden");
+  }
  }catch(error){
   state.user=null;
-  $("#auth-view").classList.remove("hidden");$("#app-view").classList.add("hidden");
+  $("#auth-view").classList.remove("hidden");
+  $("#app-view").classList.add("hidden");
   toast(authError(error));
  }
 }
