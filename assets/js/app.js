@@ -2,7 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
-const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard"};
+const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[]};
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const each=(selector,callback)=>{
@@ -77,9 +77,9 @@ async function loadData(){
   supabase.from("seo_checks").select("*").order("created_at",{ascending:false})
  ]);
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;renderAll();
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;await loadCms();renderAll();
 }
-function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
+function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
 function renderDashboard(){
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
@@ -242,6 +242,113 @@ function openSiteModal(site=null){
 }
 function closeModal(){$("#modal-root").innerHTML=""}
 
+
+// ===== CMS CORE: Posts / Pages / Categories / Tags =====
+state.posts=[];state.pages=[];state.categories=[];state.tags=[];
+
+function slugify(value){
+  return String(value||"").trim().toLowerCase()
+    .normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"")
+    .replace(/[^a-z0-9\\u0600-\\u06ff]+/g,"-").replace(/^-+|-+$/g,"").slice(0,100);
+}
+function cmsSite(){return state.selectedSite||state.sites[0]||null}
+async function loadCms(){
+  const s=cmsSite();
+  if(!s){state.posts=[];state.pages=[];state.categories=[];state.tags=[];return}
+  const [p,pg,c,t]=await Promise.all([
+    supabase.from("posts").select("*").eq("site_id",s.id).order("updated_at",{ascending:false}),
+    supabase.from("pages").select("*").eq("site_id",s.id).order("updated_at",{ascending:false}),
+    supabase.from("categories").select("*").eq("site_id",s.id).order("name"),
+    supabase.from("tags").select("*").eq("site_id",s.id).order("name")
+  ]);
+  [p,pg,c,t].forEach(r=>{if(r.error)toast(authError(r.error))});
+  state.posts=p.data||[];state.pages=pg.data||[];state.categories=c.data||[];state.tags=t.data||[];
+}
+function postStatusBadge(status){
+  const cls=status==="published"?"success":status==="scheduled"?"warning":"neutral";
+  return '<span class="badge '+cls+'">'+esc(status)+'</span>';
+}
+function renderPosts(){
+  const s=cmsSite();
+  if(!s){$("#view-posts").innerHTML='<div class="card empty">Choose a website first from My Sites.</div>';return}
+  $("#view-posts").innerHTML='<div class="toolbar"><div><h3>Posts</h3><p class="muted">Create and manage SEO-ready articles for '+esc(s.name)+'.</p></div><button class="btn primary" id="new-post"><i data-lucide="plus"></i>New post</button></div>'+
+  '<div class="card table-wrap"><table class="table"><thead><tr><th>Title</th><th>Status</th><th>SEO</th><th>Updated</th><th></th></tr></thead><tbody>'+
+  (state.posts.length?state.posts.map(p=>'<tr><td><strong>'+esc(p.title||"(Untitled)")+'</strong><small class="muted" style="display:block">/'+esc(p.slug)+'</small></td><td>'+postStatusBadge(p.status)+'</td><td><span class="badge '+(p.meta_description&&p.focus_keyword?"success":"warning")+'">'+(p.meta_description&&p.focus_keyword?"Ready":"Needs SEO")+'</span></td><td>'+dt(p.updated_at)+'</td><td><button class="btn secondary edit-post" data-id="'+p.id+'"><i data-lucide="pencil"></i>Edit</button></td></tr>').join(""):'<tr><td colspan="5" class="empty">No posts yet.</td></tr>')+
+  '</tbody></table></div>';
+  $("#new-post").onclick=()=>openPostEditor();
+  each(".edit-post",b=>b.onclick=()=>openPostEditor(state.posts.find(x=>x.id===b.dataset.id)));
+}
+function renderPages(){
+  const s=cmsSite();
+  if(!s){$("#view-pages").innerHTML='<div class="card empty">Choose a website first from My Sites.</div>';return}
+  $("#view-pages").innerHTML='<div class="toolbar"><div><h3>Pages</h3><p class="muted">Static pages such as About, Contact and Privacy Policy.</p></div><button class="btn primary" id="new-page"><i data-lucide="plus"></i>New page</button></div>'+
+  '<div class="card table-wrap"><table class="table"><thead><tr><th>Title</th><th>Status</th><th>SEO</th><th>Updated</th><th></th></tr></thead><tbody>'+
+  (state.pages.length?state.pages.map(p=>'<tr><td><strong>'+esc(p.title||"(Untitled)")+'</strong><small class="muted" style="display:block">/'+esc(p.slug)+'</small></td><td>'+postStatusBadge(p.status)+'</td><td><span class="badge '+(p.meta_description?"success":"warning")+'">'+(p.meta_description?"Ready":"Needs SEO")+'</span></td><td>'+dt(p.updated_at)+'</td><td><button class="btn secondary edit-page" data-id="'+p.id+'"><i data-lucide="pencil"></i>Edit</button></td></tr>').join(""):'<tr><td colspan="5" class="empty">No pages yet.</td></tr>')+
+  '</tbody></table></div>';
+  $("#new-page").onclick=()=>openPageEditor();
+  each(".edit-page",b=>b.onclick=()=>openPageEditor(state.pages.find(x=>x.id===b.dataset.id)));
+}
+function renderTaxonomy(type){
+  const isCat=type==="categories", rows=isCat?state.categories:state.tags, title=isCat?"Categories":"Tags";
+  const id=isCat?"categories":"tags";
+  $("#view-"+id).innerHTML='<div class="toolbar"><div><h3>'+title+'</h3><p class="muted">Organize content for '+esc(cmsSite()?.name||"your site")+'.</p></div><button class="btn primary" id="new-'+id+'"><i data-lucide="plus"></i>Add '+(isCat?"category":"tag")+'</button></div>'+
+  '<div class="card table-wrap"><table class="table"><thead><tr><th>Name</th><th>Slug</th><th>Created</th><th></th></tr></thead><tbody>'+
+  (rows.length?rows.map(x=>'<tr><td><strong>'+esc(x.name)+'</strong></td><td>'+esc(x.slug)+'</td><td>'+dt(x.created_at)+'</td><td><button class="icon-btn delete-tax" data-id="'+x.id+'" data-type="'+type+'"><i data-lucide="trash-2"></i></button></td></tr>').join(""):'<tr><td colspan="4" class="empty">Nothing here yet.</td></tr>')+
+  '</tbody></table></div>';
+  $("#new-"+id).onclick=()=>openTaxonomyModal(type);
+  each(".delete-tax",b=>b.onclick=()=>deleteTaxonomy(b.dataset.id,b.dataset.type));
+}
+function seoFields(item,isPage=false){
+  return '<div class="cms-seo-grid"><label>Meta title<input name="meta_title" maxlength="60" value="'+esc(item?.meta_title||item?.title||"")+'" placeholder="SEO title"></label>'+
+  '<label>Focus keyword'+(isPage?'':'<input name="focus_keyword" maxlength="80" value="'+esc(item?.focus_keyword||"")+'" placeholder="primary keyword">')+'</label>'+
+  '<label class="full-field">Meta description<textarea name="meta_description" maxlength="160" rows="3" placeholder="Compelling description for search results">'+esc(item?.meta_description||"")+'</textarea></label>'+
+  '<label>Canonical URL<input name="canonical_url" type="url" value="'+esc(item?.canonical_url||"")+'" placeholder="https://example.com/..."></label>'+
+  '<label>Robots<select name="robots"><option value="index,follow" '+(item?.robots!=="noindex,nofollow"?"selected":"")+'>index, follow</option><option value="noindex,nofollow" '+(item?.robots==="noindex,nofollow"?"selected":"")+'>noindex, nofollow</option></select></label>'+
+  (!isPage?'<label>Schema type<select name="schema_type"><option>BlogPosting</option><option>Article</option><option>NewsArticle</option><option>WebPage</option></select></label>':"")+
+  '</div>';
+}
+function editorModal(item,isPage=false){
+  const title=isPage?"Page editor":"Post editor", data=item||{}, slug=data.slug||slugify(data.title||"new-"+(isPage?"page":"post"));
+  return '<div class="modal-backdrop"><div class="modal cms-editor-modal"><div class="modal-head"><div><h3>'+title+'</h3><small class="muted">HTML mode + SEO controls</small></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div>'+
+  '<form id="cms-editor-form"><div class="form-grid"><label class="full-field">Title<input name="title" required value="'+esc(data.title||"")+'" placeholder="'+(isPage?"About us":"Your article title")+'"></label>'+
+  '<label>Slug<input name="slug" required value="'+esc(slug)+'" placeholder="url-slug"></label>'+
+  '<label>Status<select name="status">'+(isPage?'<option value="draft" '+(data.status==="draft"?"selected":"")+'>draft</option><option value="published" '+(data.status==="published"?"selected":"")+'>published</option>':'<option value="draft" '+(data.status==="draft"?"selected":"")+'>draft</option><option value="published" '+(data.status==="published"?"selected":"")+'>published</option><option value="scheduled" '+(data.status==="scheduled"?"selected":"")+'>scheduled</option>')+'</select></label>'+
+  (!isPage?'<label>Scheduled at<input type="datetime-local" name="scheduled_at" value="'+esc(data.scheduled_at?new Date(data.scheduled_at).toISOString().slice(0,16):"")+'"></label>':"")+
+  (!isPage?'<label>Excerpt<textarea name="excerpt" rows="3">'+esc(data.excerpt||"")+'</textarea></label>':"")+
+  '<label class="full-field">HTML content<textarea name="content" class="cms-code" spellcheck="false" placeholder="<h2>Your content</h2>">'+esc(data.content||"")+'</textarea></label>'+
+  '<div class="full-field cms-preview"><div class="section-head"><strong>Content preview</strong><button type="button" class="btn secondary" id="cms-refresh-preview">Refresh</button></div><iframe id="cms-preview-frame" sandbox="allow-same-origin"></iframe></div>'+
+  '<div class="full-field cms-seo"><div class="section-head"><strong>SEO settings</strong><span class="badge neutral">Google preview ready</span></div>'+seoFields(data,isPage)+'</div>'+
+  '<div class="full-field cms-search-preview"><span class="muted tiny">Search preview</span><strong id="search-preview-title">'+esc(data.meta_title||data.title||"Page title")+'</strong><span id="search-preview-url">/'+esc(slug)+'</span><p id="search-preview-desc">'+esc(data.meta_description||"Add a meta description to improve your search snippet.")+'</p></div>'+
+  '<div class="modal-actions full-field"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">'+(item?"Save changes":"Create")+'</button></div></div></form></div></div>';
+}
+function bindEditor(item,isPage){
+  const form=$("#cms-editor-form"), title=form.elements.title, slug=form.elements.slug, content=form.elements.content, metaTitle=form.elements.meta_title, metaDesc=form.elements.meta_description;
+  const preview=()=>{const frame=$("#cms-preview-frame");if(frame)frame.srcdoc='<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;max-width:850px;margin:30px auto;padding:20px;line-height:1.7}img{max-width:100%}</style></head><body>'+content.value+'</body></html>';$("#search-preview-title").textContent=metaTitle.value||title.value||"Page title";$("#search-preview-url").textContent="/"+(slug.value||slugify(title.value));$("#search-preview-desc").textContent=metaDesc.value||"Add a meta description to improve your search snippet."};
+  title.oninput=()=>{if(!item&&!slug.dataset.manual)slug.value=slugify(title.value);preview()};
+  slug.oninput=()=>slug.dataset.manual="1";
+  content.oninput=preview;metaTitle.oninput=preview;metaDesc.oninput=preview;$("#cms-refresh-preview").onclick=preview;preview();
+  $("#cancel-modal").onclick=closeModal;$("#close-modal").onclick=closeModal;
+  form.onsubmit=async e=>{
+    e.preventDefault();const f=new FormData(form),s=cmsSite();
+    const payload={user_id:state.user.id,site_id:s.id,title:f.get("title").trim(),slug:slugify(f.get("slug"))||slugify(f.get("title")),content:f.get("content"),status:f.get("status"),meta_title:f.get("meta_title"),meta_description:f.get("meta_description"),canonical_url:f.get("canonical_url"),robots:f.get("robots")};
+    if(isPage){const q=item?supabase.from("pages").update(payload).eq("id",item.id):supabase.from("pages").insert(payload);const r=await q.select().single();if(r.error){toast(authError(r.error));return}state.pages=item?state.pages.map(x=>x.id===item.id?r.data:x):[r.data,...state.pages];}
+    else{payload.excerpt=f.get("excerpt");payload.focus_keyword=f.get("focus_keyword");payload.schema_type=f.get("schema_type");payload.scheduled_at=f.get("scheduled_at")?new Date(f.get("scheduled_at")).toISOString():null;payload.published_at=f.get("status")==="published"?(item?.published_at||new Date().toISOString()):null;const q=item?supabase.from("posts").update(payload).eq("id",item.id):supabase.from("posts").insert(payload);const r=await q.select().single();if(r.error){toast(authError(r.error));return}state.posts=item?state.posts.map(x=>x.id===item.id?r.data:x):[r.data,...state.posts];}
+    closeModal();renderPosts();renderPages();toast(item?"Content updated":"Content created","success");icons();
+  };
+}
+function openPostEditor(item=null){$("#modal-root").innerHTML=editorModal(item,false);icons();bindEditor(item,false)}
+function openPageEditor(item=null){$("#modal-root").innerHTML=editorModal(item,true);icons();bindEditor(item,true)}
+function openTaxonomyModal(type){
+  const isCat=type==="categories", title=isCat?"Add category":"Add tag";
+  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>'+title+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="tax-form"><label>Name<input name="name" required></label><label style="margin-top:14px">Slug<input name="slug" placeholder="auto-generated"></label><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Save</button></div></form></div></div>';icons();
+  $("#close-modal").onclick=closeModal;$("#cancel-modal").onclick=closeModal;$("#tax-form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),s=cmsSite(),name=f.get("name").trim(),slug=slugify(f.get("slug")||name),payload={user_id:state.user.id,site_id:s.id,name,slug};const table=isCat?"categories":"tags";const r=await supabase.from(table).insert(payload).select().single();if(r.error){toast(authError(r.error));return}if(isCat)state.categories.push(r.data);else state.tags.push(r.data);closeModal();renderTaxonomy(type);toast((isCat?"Category":"Tag")+" created","success")};
+}
+async function deleteTaxonomy(id,type){
+ const table=type==="categories"?"categories":"tags";if(!confirm("Delete this "+(type==="categories"?"category":"tag")+"?"))return;
+ const r=await supabase.from(table).delete().eq("id",id);if(r.error){toast(authError(r.error));return}
+ if(type==="categories")state.categories=state.categories.filter(x=>x.id!==id);else state.tags=state.tags.filter(x=>x.id!==id);renderTaxonomy(type);toast("Deleted","success");
+}
+
 function renderDomains(){
  $("#view-domains").innerHTML='<div class="toolbar"><div><h3>Domains</h3><p class="muted">Track domains connected to your websites.</p></div><button class="btn primary" id="add-domain"><i data-lucide="plus"></i>Add domain</button></div><div class="card table-wrap"><table class="table"><thead><tr><th>Domain</th><th>Website</th><th>Status</th><th>Added</th><th></th></tr></thead><tbody>'+
  (state.domains.length?state.domains.map(d=>'<tr><td><strong>'+esc(d.domain)+'</strong></td><td>'+esc(d.sites?.name||"—")+'</td><td><span class="badge '+(d.status==="verified"?"success":"warning")+'">'+esc(d.status||"pending")+'</span></td><td>'+dt(d.created_at)+'</td><td><button class="icon-btn delete-domain" data-id="'+d.id+'"><i data-lucide="trash-2"></i></button></td></tr>').join(""):'<tr><td colspan="5" class="empty">No domains added.</td></tr>')+'</tbody></table></div>';
@@ -272,12 +379,13 @@ function renderSettings(){
  $("#view-settings").innerHTML='<div class="section-head"><div><h3>Settings</h3><p class="muted">Account and dashboard preferences.</p></div></div><div class="grid two-col"><section class="card"><h3>Account</h3><div style="margin-top:15px"><label>Email<input value="'+esc(state.user?.email||"")+'" disabled></label></div><p class="tiny muted">Authentication is handled by Supabase Auth.</p></section><section class="card"><h3>Appearance</h3><p class="muted">Choose light or dark mode.</p><button class="btn secondary" id="settings-theme"><i data-lucide="moon"></i>Toggle theme</button></section></div>';
  $("#settings-theme").onclick=toggleTheme;
 }
-function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
+function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",posts:"Posts",pages:"Pages",categories:"Categories",tags:"Tags",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
 let signUp=false;
 $("#connection-test")?.addEventListener("click",testSupabaseConnection);
+each(".nav-item[data-view]",b=>b.onclick=()=>showView(b.dataset.view));
 $("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
 $("#auth-form").onsubmit=async e=>{
  e.preventDefault();
@@ -295,7 +403,6 @@ $("#auth-form").onsubmit=async e=>{
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
-each(".nav-item[data-view]",b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 
 async function handleAuth(){
