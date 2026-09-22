@@ -49,6 +49,7 @@ async function render(){
   db.from("domain_verifications").select("*,domains(domain)").eq("site_id",site.id).order("created_at",{ascending:false})
  ]);
  const media=m.data||[],redirects=d.data||[],checks=c.data||[],verifications=v.data||[];
+ if(window.__mPanelState){window.__mPanelState.redirects=redirects;}
  const pass=checks.filter(x=>x.status==="pass").length,fail=checks.filter(x=>x.status==="fail").length;
  root.innerHTML='<div class="toolbar"><div><span class="eyebrow">PLATFORM CENTER</span><h3>'+esc(site.name)+'</h3><p class="muted">Production controls for media, builder output, redirects, domains, security, performance and deployment readiness.</p></div><button class="btn secondary" id="pf-refresh"><i data-lucide="refresh-cw"></i>Refresh</button></div><div class="platform-grid">'+
  card("images","Media Library","Real Supabase Storage uploads with reusable SEO metadata.",mediaHtml(media))+
