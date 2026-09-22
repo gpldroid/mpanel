@@ -455,6 +455,52 @@ function renderSettings(){
 }
 function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",posts:"Posts",pages:"Pages",categories:"Categories",tags:"Tags",files:"File Manager",theme:"Theme",layout:"Layout",widgets:"Widgets / Gadgets",navigation:"Navigation",github:"GitHub",publishing:"Publishing",analytics:"Analytics",builder:"Builder",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");if(v==="analytics")renderAnalytics();if(v==="builder")renderBuilder();icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
+function setAuthScreen(visible){
+  const auth=$("#auth-view"),app=$("#app-view");
+  if(!auth||!app)return;
+  auth.classList.toggle("hidden",!visible);
+  app.classList.toggle("hidden",visible);
+}
+function resetSessionState(){
+  state.user=null;
+  state.sites=[];state.domains=[];state.seo=[];state.files=[];state.selectedSite=null;state.selectedFile=null;
+  state.posts=[];state.pages=[];state.categories=[];state.tags=[];state.siteSeo=null;state.revisions=[];state.deployments=[];
+  state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;
+  state.github={connected:false,login:null,token:null,repo:null};
+}
+let signingOut=false;
+async function signOut(){
+  if(signingOut)return;
+  signingOut=true;
+  each("#account-logout,#logout-btn",b=>{b.disabled=true;b.setAttribute("aria-busy","true")});
+  try{
+    const {error}=await supabase.auth.signOut();
+    if(error)throw error;
+  }catch(error){
+    toast("Sign out failed: "+authError(error));
+    signingOut=false;
+    each("#account-logout,#logout-btn",b=>{b.disabled=false;b.removeAttribute("aria-busy")});
+    return;
+  }
+  resetSessionState();
+  closeAccountMenu();
+  setAuthScreen(true);
+  showView("dashboard");
+  signingOut=false;
+  each("#account-logout,#logout-btn",b=>{b.disabled=false;b.removeAttribute("aria-busy")});
+  toast("You have been signed out.","success");
+}
+function closeAccountMenu(){
+  const menu=$("#account-menu"),button=$("#profile-btn");
+  if(menu)menu.classList.add("hidden");
+  button?.setAttribute("aria-expanded","false");
+}
+function toggleAccountMenu(){
+  const menu=$("#account-menu"),button=$("#profile-btn");
+  if(!menu||!button)return;
+  const open=!menu.classList.toggle("hidden");
+  button.setAttribute("aria-expanded",String(open));
+}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
 let signUp=false;
@@ -476,8 +522,13 @@ $("#auth-form").onsubmit=async e=>{
  }catch(error){toast(authError(error))}
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
-$("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
-$("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
+$("#logout-btn").onclick=signOut;
+$("#account-logout").onclick=signOut;
+$("#account-settings").onclick=()=>{closeAccountMenu();showView("settings")};
+$("#theme-btn").onclick=toggleTheme;
+$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");
+$("#profile-btn").onclick=(event)=>{event.stopPropagation();toggleAccountMenu()};
+document.addEventListener("click",event=>{if(!event.target.closest(".account-wrap"))closeAccountMenu()});
 initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()});
 initDesign({supabase,state,showView,toast,renderAll,icons});
 initAnalytics({supabase,state,showView,toast,renderAll,icons});
@@ -493,6 +544,8 @@ async function handleAuth(){
    $("#auth-view").classList.add("hidden");
    $("#app-view").classList.remove("hidden");
    $("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();
+   $("#account-email").textContent=session.user.email||"Account";
+   setAuthScreen(false);
    showView("dashboard");
    try{
     await loadData();
@@ -501,14 +554,14 @@ async function handleAuth(){
     toast("Dashboard loaded, but some data could not be loaded: "+authError(dataError));
    }
   }else{
-   state.user=null;
-   $("#auth-view").classList.remove("hidden");
-   $("#app-view").classList.add("hidden");
+   resetSessionState();
+   closeAccountMenu();
+   setAuthScreen(true);
   }
  }catch(error){
-  state.user=null;
-  $("#auth-view").classList.remove("hidden");
-  $("#app-view").classList.add("hidden");
+  resetSessionState();
+  closeAccountMenu();
+  setAuthScreen(true);
   toast(authError(error));
  }
 }
