@@ -682,25 +682,25 @@ async function initializeFeatureModules(){
  }
 }
 
+let authBooting=false;
 async function handleAuth(){
+ if(authBooting)return;
+ authBooting=true;
  try{
   const{data:{session},error}=await supabase.auth.getSession();
   if(error)throw error;
   if(session){
    state.user=session.user;
    if(cleanAuthHash()) history.replaceState({},document.title,getAuthRedirectUrl());
-   $("#auth-view").classList.add("hidden");
-   $("#app-view").classList.remove("hidden");
+   setAuthScreen(false);
    $("#avatar-letter").textContent=(session.user.email||"U")[0].toUpperCase();
    $("#account-email").textContent=session.user.email||"Account";
-   setAuthScreen(false);
    showView("dashboard");
-   try{
-    await loadData();
-   }catch(dataError){
+   // Never block the login transition on CMS/optional data. The dashboard is usable immediately.
+   loadData().catch(dataError=>{
     console.error("[mPanel data boot error]",dataError);
     toast("Dashboard loaded, but some data could not be loaded: "+authError(dataError));
-   }
+   });
   }else{
    resetSessionState();
    closeAccountMenu();
@@ -711,9 +711,16 @@ async function handleAuth(){
   closeAccountMenu();
   setAuthScreen(true);
   toast(authError(error));
+ }finally{
+  authBooting=false;
  }
 }
-supabase.auth.onAuthStateChange((event,session)=>{setTimeout(()=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}},0)});
+supabase.auth.onAuthStateChange((event,session)=>{
+ setTimeout(()=>{
+  if(event==="SIGNED_OUT"){resetSessionState();setAuthScreen(true);return}
+  if(session&&!state.user)handleAuth();
+ },0);
+});
 // Authentication must never wait for optional CMS integrations.
 handleAuth().catch(error=>toast(authError(error)));
 icons();
