@@ -425,7 +425,7 @@ async function updatePreview(){
  const generation=++previewGeneration;
  frame.dataset.previewGeneration=String(generation);
  try{
-  const html=await buildPreviewDocument();
+  const html=await buildPreviewDocument(generation);
   if(generation!==previewGeneration)return;
   frame.srcdoc=html;
  }catch(error){
