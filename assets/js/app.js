@@ -626,6 +626,7 @@ async function handleAuth(){
  }
 }
 supabase.auth.onAuthStateChange((event,session)=>{setTimeout(()=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}},0)});
-await initializeFeatureModules();
+// Authentication must never wait for optional CMS integrations.
 handleAuth().catch(error=>toast(authError(error)));
 icons();
+initializeFeatureModules().catch(error=>console.error("[mPanel feature boot]",error));
