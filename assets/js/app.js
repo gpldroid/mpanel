@@ -3,7 +3,15 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard"};
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s);
+const $=s=>Array.from(document.querySelectorAll(s));
+const each=(selector,callback)=>{
+  const nodes=document.querySelectorAll(selector);
+  for(let i=0;i<nodes.length;i++)callback(nodes[i],i,nodes);
+};
+window.addEventListener("error",event=>{
+  console.error("[mPanel runtime error]",event.message,event.filename,event.lineno,event.colno,event.error);
+});
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 function icons(){try{if(window.lucide&&typeof window.lucide.createIcons==="function")window.lucide.createIcons()}catch(error){console.warn("mPanel icon rendering skipped:",error)}}
 const dt=v=>v?new Date(v).toLocaleDateString():"—";
@@ -80,7 +88,7 @@ function renderDashboard(){
  (state.sites.length?'<div class="site-list">'+state.sites.slice(0,5).map(siteRow).join("")+'</div>':'<div class="empty"><i data-lucide="globe"></i><p>No websites yet.</p><button class="btn primary" id="dash-add-site">Add your first site</button></div>')+
  '</section><section class="card"><div class="section-head"><h3>Free plan</h3><span class="badge success">Active</span></div><p class="muted">Manage up to 3 websites with domains, SEO tasks and basic monitoring.</p><div class="progress"><i style="width:'+Math.min(100,state.sites.length/3*100)+'%"></i></div><p class="tiny muted">'+state.sites.length+' of 3 website slots used.</p></section></div>';
  $("#dash-add-site")?.addEventListener("click",()=>openSiteModal());
- $$("[data-go]").forEach(b=>b.onclick=()=>showView(b.dataset.go));
+ each("[data-go]",b=>b.onclick=()=>showView(b.dataset.go));
 }
 
 function renderSites(){
@@ -88,9 +96,9 @@ function renderSites(){
  (state.sites.length?'<div class="site-list">'+state.sites.map(s=>'<div class="site-row"><div class="site-main"><div class="site-favicon"><i data-lucide="globe-2"></i></div><div><div class="site-name">'+esc(s.name)+'</div><div class="site-url">'+esc(s.url)+'</div><small class="muted">Added '+dt(s.created_at)+'</small></div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge '+(s.status==="active"?"success":"warning")+'">'+esc(s.status||"active")+'</span><button class="btn secondary manage-site" data-id="'+s.id+'"><i data-lucide="panel-top"></i>Manage</button><button class="icon-btn edit-site" data-id="'+s.id+'" title="Edit"><i data-lucide="pencil"></i></button><button class="icon-btn delete-site" data-id="'+s.id+'" title="Delete"><i data-lucide="trash-2"></i></button></div></div>').join("")+'</div>':
  '<div class="empty"><i data-lucide="globe-2"></i><h3>No websites</h3><p>Add a website to start.</p></div>')+'</div>';
  $("#add-site").onclick=()=>openSiteModal();
- $$(".manage-site").forEach(b=>b.onclick=()=>openWebsiteManager(b.dataset.id));
- $$(".edit-site").forEach(b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
- $$(".delete-site").forEach(b=>b.onclick=()=>deleteSite(b.dataset.id));
+ each(".manage-site",b=>b.onclick=()=>openWebsiteManager(b.dataset.id));
+ each(".edit-site",b=>b.onclick=()=>openSiteModal(state.sites.find(s=>s.id===b.dataset.id)));
+ each(".delete-site",b=>b.onclick=()=>deleteSite(b.dataset.id));
 }
 
 async function ensureWorkspaceFiles(site){
@@ -128,7 +136,7 @@ function renderManager(){
  '<div class="card" style="margin-bottom:18px"><div class="workspace-tabs"><button class="btn active" data-workspace="manager">Overview</button><button class="btn secondary" data-workspace="files"><i data-lucide="folder-code"></i>Files</button><button class="btn secondary" data-workspace="theme"><i data-lucide="palette"></i>Theme & Preview</button><button class="btn secondary" id="manager-site-settings"><i data-lucide="settings"></i>Site settings</button></div></div>'+
  '<div class="manager-cards"><div class="manager-card"><i data-lucide="folder-code"></i><h4>File Manager</h4><p>Create, edit, rename and remove text files stored for this website.</p><button class="btn secondary" style="margin-top:14px" data-workspace="files">Open files</button></div><div class="manager-card"><i data-lucide="palette"></i><h4>Theme Editor</h4><p>Edit HTML, CSS and JavaScript with an isolated live preview.</p><button class="btn secondary" style="margin-top:14px" data-workspace="theme">Open editor</button></div><div class="manager-card"><i data-lucide="history"></i><h4>Version safety</h4><p>Every saved file change creates a server-side previous version in Supabase.</p><button class="btn secondary" style="margin-top:14px" id="manager-history">View history</button></div></div>'+
  '<div class="grid two-col" style="margin-top:18px"><section class="card"><h3>Website status</h3><p class="muted">This workspace is connected to your mPanel database. Publishing to an external host requires a future GitHub/deployment connector.</p><div class="site-list" style="margin-top:14px"><div class="site-row"><span>Files</span><strong>'+state.files.length+'</strong></div><div class="site-row"><span>Last updated</span><strong>'+dt(state.files.reduce((a,b)=>new Date(a.updated_at)>new Date(b.updated_at)?a:b,{updated_at:s.updated_at}).updated_at)+'</strong></div></div></section><section class="card"><h3>Safe editing</h3><p class="muted">index.html is protected from deletion. CSS and JavaScript can be changed and previewed before you save.</p><span class="badge success">Supabase RLS enabled</span></section></div>';
- $$("[data-workspace]").forEach(b=>b.onclick=()=>managerTab(b.dataset.workspace));
+ each("[data-workspace]",b=>b.onclick=()=>managerTab(b.dataset.workspace));
  $("#manager-refresh").onclick=()=>ensureWorkspaceFiles(state.selectedSite);
  $("#manager-site-settings").onclick=()=>openSiteModal(s);
  $("#manager-history").onclick=()=>openFileHistory();
@@ -148,8 +156,8 @@ function renderFiles(){
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
  $("#new-file").onclick=openNewFileModal;
- $$(".file-item").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
- $("#file-search").oninput=e=>{$$(".file-item").forEach(b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
+ each(".file-item",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
+ $("#file-search").oninput=e=>{each(".file-item",b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
  $("#history-file")?.addEventListener("click",openFileHistory);
  $("#delete-file")?.addEventListener("click",deleteSelectedFile);
@@ -198,7 +206,7 @@ async function openFileHistory(){
  if(error){toast(authError(error));return}
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h3>Version history — '+esc(file.path)+'</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div>'+(data?.length?'<div class="site-list">'+data.map(v=>'<div class="site-row"><div><strong>'+dt(v.created_at)+'</strong><small class="muted" style="display:block">Previous saved version</small></div><button class="btn secondary restore-version" data-id="'+v.id+'">Restore</button></div>').join("")+'</div>':'<div class="empty">No previous versions yet. Save the file to create one.</div>')+'</div></div>';
  icons();$("#close-modal").onclick=closeModal;
- $$(".restore-version").forEach(b=>b.onclick=async()=>{const v=data.find(x=>x.id===b.dataset.id);if(!v)return;if(!confirm("Restore this previous version? The current content will be snapshotted first."))return;const {data:updated,error:restoreError}=await supabase.from("site_files").update({content:v.content,updated_at:new Date().toISOString()}).eq("id",file.id).select().single();if(restoreError){toast(authError(restoreError));return}state.selectedFile=updated;await loadSiteFiles();closeModal();renderFiles();renderTheme();updatePreview();toast("Version restored","success")});
+ each(".restore-version",b=>b.onclick=async()=>{const v=data.find(x=>x.id===b.dataset.id);if(!v)return;if(!confirm("Restore this previous version? The current content will be snapshotted first."))return;const {data:updated,error:restoreError}=await supabase.from("site_files").update({content:v.content,updated_at:new Date().toISOString()}).eq("id",file.id).select().single();if(restoreError){toast(authError(restoreError));return}state.selectedFile=updated;await loadSiteFiles();closeModal();renderFiles();renderTheme();updatePreview();toast("Version restored","success")});
 }
 function renderTheme(){
  const s=state.selectedSite;
@@ -211,7 +219,7 @@ function renderTheme(){
  '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"")+'</div><div class="editor-actions"><span class="badge neutral">Live draft</span></div></div><textarea id="theme-editor" class="code-editor" spellcheck="false">'+esc(file?.content||"")+'</textarea></section>'+
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><button class="icon-btn" id="theme-refresh"><i data-lucide="refresh-cw"></i></button></div><iframe id="theme-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#theme-back").onclick=()=>showView("manager");
- $$("#view-theme [data-theme-file]").forEach(b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.path===b.dataset.themeFile)||null;renderTheme();updatePreview()});
+ each("#view-theme [data-theme-file]",b=>b.onclick=()=>{state.selectedFile=state.files.find(x=>x.path===b.dataset.themeFile)||null;renderTheme();updatePreview()});
  $("#theme-save").onclick=saveThemeFile;
  $("#theme-editor").oninput=()=>{const draft=state.files.find(x=>x.id===state.selectedFile?.id);if(draft)draft.content=$("#theme-editor").value;updatePreview()};
  $("#theme-refresh").onclick=updatePreview;updatePreview();
@@ -237,7 +245,7 @@ function closeModal(){$("#modal-root").innerHTML=""}
 function renderDomains(){
  $("#view-domains").innerHTML='<div class="toolbar"><div><h3>Domains</h3><p class="muted">Track domains connected to your websites.</p></div><button class="btn primary" id="add-domain"><i data-lucide="plus"></i>Add domain</button></div><div class="card table-wrap"><table class="table"><thead><tr><th>Domain</th><th>Website</th><th>Status</th><th>Added</th><th></th></tr></thead><tbody>'+
  (state.domains.length?state.domains.map(d=>'<tr><td><strong>'+esc(d.domain)+'</strong></td><td>'+esc(d.sites?.name||"—")+'</td><td><span class="badge '+(d.status==="verified"?"success":"warning")+'">'+esc(d.status||"pending")+'</span></td><td>'+dt(d.created_at)+'</td><td><button class="icon-btn delete-domain" data-id="'+d.id+'"><i data-lucide="trash-2"></i></button></td></tr>').join(""):'<tr><td colspan="5" class="empty">No domains added.</td></tr>')+'</tbody></table></div>';
- $("#add-domain").onclick=openDomainModal;$$(".delete-domain").forEach(b=>b.onclick=()=>deleteDomain(b.dataset.id));
+ $("#add-domain").onclick=openDomainModal;each(".delete-domain",b=>b.onclick=()=>deleteDomain(b.dataset.id));
 }
 function openDomainModal(){
  if(!state.sites.length){toast("Add a website first.");return}
@@ -252,7 +260,7 @@ function renderSeo(){
  $("#view-seo").innerHTML='<div class="section-head"><div><h3>SEO checklist</h3><p class="muted">Track essential on-page SEO tasks.</p></div><span class="badge neutral">'+pct+'% complete</span></div><div class="grid two-col"><section class="card"><div class="progress"><i style="width:'+pct+'%"></i></div><div class="checklist" style="margin-top:16px">'+
  (total?state.seo.map(x=>'<label class="check"><input type="checkbox" data-seo="'+x.id+'" '+(x.completed?"checked":"")+'><span><strong>'+esc(x.title)+'</strong><small class="muted" style="display:block">'+esc(x.description||"")+'</small></span></label>').join(""):'<div class="empty">SEO tasks will appear after you add a site.</div>')+
  '</div></section><section class="card"><h3>Recommended basics</h3><ul class="muted"><li>Unique title and meta description</li><li>Canonical URL</li><li>Responsive/mobile layout</li><li>robots.txt and sitemap.xml</li><li>HTTPS and accessible navigation</li></ul></section></div>';
- $$("[data-seo]").forEach(c=>c.onchange=async()=>{const{error}=await supabase.from("seo_checks").update({completed:c.checked}).eq("id",c.dataset.seo);if(error)toast(error.message);else loadData()});
+ each("[data-seo]",c=>c.onchange=async()=>{const{error}=await supabase.from("seo_checks").update({completed:c.checked}).eq("id",c.dataset.seo);if(error)toast(error.message);else loadData()});
 }
 
 function renderMonitoring(){
@@ -264,7 +272,7 @@ function renderSettings(){
  $("#view-settings").innerHTML='<div class="section-head"><div><h3>Settings</h3><p class="muted">Account and dashboard preferences.</p></div></div><div class="grid two-col"><section class="card"><h3>Account</h3><div style="margin-top:15px"><label>Email<input value="'+esc(state.user?.email||"")+'" disabled></label></div><p class="tiny muted">Authentication is handled by Supabase Auth.</p></section><section class="card"><h3>Appearance</h3><p class="muted">Choose light or dark mode.</p><button class="btn secondary" id="settings-theme"><i data-lucide="moon"></i>Toggle theme</button></section></div>';
  $("#settings-theme").onclick=toggleTheme;
 }
-function showView(v){state.view=v;$$(".view").forEach(x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");$$(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
+function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",files:"File Manager",theme:"Theme Editor",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
@@ -287,7 +295,7 @@ $("#auth-form").onsubmit=async e=>{
  finally{btn.disabled=false;btn.textContent=signUp?"Create account":"Sign in"}
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
-$$(".nav-item[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+each(".nav-item[data-view]",b=>b.onclick=()=>showView(b.dataset.view));
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 
 async function handleAuth(){
