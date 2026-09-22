@@ -14,7 +14,7 @@ async function loadFeatureModules(){
     ["Builder",()=>import("./builder.js")],
     ["Analytics",()=>import("./analytics.js")],
     ["Builder UI",()=>import("./builder-ui.js")],
-    ["Workspace IO",()=>import("./workspace-io.js")]
+    ["Workspace IO",()=>import("./workspace-io.js?v=20260922-002")]
   ];
   const results=await Promise.allSettled(modules.map(([,loader])=>loader()));
   const failures=[];
