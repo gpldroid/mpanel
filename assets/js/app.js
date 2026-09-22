@@ -3,10 +3,11 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { renderGitHub, initGitHub, openGitHubImport, pushSiteToGitHub } from "./integrations/github.js";
 import { renderDesign, initDesign } from "./design/design.js";
 import { buildSiteFiles, buildPreview } from "./builder.js";
+import { renderAnalytics, initAnalytics } from "./analytics.js";
 import { publishGeneratedSite, loadGitHubIntegration } from "./integrations/github.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
-const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[]};
+const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null};
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const each=(selector,callback)=>{
@@ -83,9 +84,9 @@ async function loadData(){
   supabase.from("deployments").select("*").eq("site_id",state.selectedSite?.id||"00000000-0000-0000-0000-000000000000").order("created_at",{ascending:false}).limit(10)
  ]);
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error)); if(d.error&&d.error.code!=="PGRST116")toast(authError(d.error)); if(e.error)toast(authError(e.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10)]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];}else{state.siteSeo=null;state.deployments=[];}await loadCms();await loadGitHubIntegration();renderAll();
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle()]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;}await loadCms();await loadGitHubIntegration();renderAll();
 }
-function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderPublishing();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
+function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderPublishing();renderAnalytics();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
 function renderDashboard(){
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
@@ -422,7 +423,7 @@ function renderSettings(){
  $("#view-settings").innerHTML='<div class="section-head"><div><h3>Settings</h3><p class="muted">Account and dashboard preferences.</p></div></div><div class="grid two-col"><section class="card"><h3>Account</h3><div style="margin-top:15px"><label>Email<input value="'+esc(state.user?.email||"")+'" disabled></label></div><p class="tiny muted">Authentication is handled by Supabase Auth.</p></section><section class="card"><h3>Appearance</h3><p class="muted">Choose light or dark mode.</p><button class="btn secondary" id="settings-theme"><i data-lucide="moon"></i>Toggle theme</button></section></div>';
  $("#settings-theme").onclick=toggleTheme;
 }
-function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",posts:"Posts",pages:"Pages",categories:"Categories",tags:"Tags",files:"File Manager",theme:"Theme",layout:"Layout",widgets:"Widgets / Gadgets",navigation:"Navigation",github:"GitHub",publishing:"Publishing",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
+function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",posts:"Posts",pages:"Pages",categories:"Categories",tags:"Tags",files:"File Manager",theme:"Theme",layout:"Layout",widgets:"Widgets / Gadgets",navigation:"Navigation",github:"GitHub",publishing:"Publishing",analytics:"Analytics",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
@@ -449,6 +450,7 @@ $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
 initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:async()=>{showView("publishing");renderPublishing()}});
 initDesign({supabase,state,showView,toast,renderAll,icons});
+initAnalytics({supabase,state,showView,toast,renderAll,icons});
 
 async function handleAuth(){
  try{
