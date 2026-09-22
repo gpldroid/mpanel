@@ -5,7 +5,7 @@ let renderDesign=()=>{},initDesign=()=>{};
 let buildSiteFiles=()=>({}),buildPreview=()=>{},validateBuild=()=>({ok:true,errors:[],warnings:[]});
 let renderAnalytics=()=>{},initAnalytics=()=>{};
 let renderBuilder=()=>{},initBuilder=()=>{};
-let renderWorkspaceIO=()=>{},initWorkspaceIO=()=>{};
+let renderWorkspaceIO=()=>{},initWorkspaceIO=()=>{},openWorkspaceIO=()=>{};
 
 async function loadFeatureModules(){
   const modules=[
@@ -31,7 +31,7 @@ async function loadFeatureModules(){
     if(name==="Builder")({buildSiteFiles,buildPreview,validateBuild}=mod);
     if(name==="Analytics")({renderAnalytics,initAnalytics}=mod);
     if(name==="Builder UI")({renderBuilder,initBuilder}=mod);
-    if(name==="Workspace IO")({renderWorkspaceIO,initWorkspaceIO}=mod);
+    if(name==="Workspace IO")({renderWorkspaceIO,initWorkspaceIO,openIO:openWorkspaceIO}=mod);
   });
   if(failures.length)toast("Optional modules unavailable: "+failures.join(", ")+". Other modules remain available.","error");
   return failures;
@@ -289,7 +289,7 @@ function renderFiles(){
  '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn secondary" id="recovery-files"><i data-lucide="archive-restore"></i>Recovery</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
- $("#github-file-import").onclick=()=>openGitHubImport();
+ $("#github-file-import").onclick=()=>{try{openWorkspaceIO()}catch(error){openGitHubImport()}};
  $("#github-file-push").onclick=()=>pushSiteToGitHub();
  $("#new-file").onclick=openNewFileModal;
  each(".file-item:not(.binary-item)",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;const r=await supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);if(r.error){toast(authError(r.error));return}downloadAssetBlob(r.data,asset.path)});
@@ -743,7 +743,7 @@ document.addEventListener("click",event=>{if(!event.target.closest(".account-wra
 async function initializeFeatureModules(){
   const failures=await loadFeatureModules();
   const initializers=[
-    ["GitHub",()=>initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()})],
+    ["GitHub",()=>initGitHub({supabase,state,showView,toast,renderAll,icons,openWorkspaceIO,publishWebsite:()=>publishCurrentSite()})],
     ["Design",()=>initDesign({supabase,state,showView,toast,renderAll,icons})],
     ["Analytics",()=>initAnalytics({supabase,state,showView,toast,renderAll,icons})],
     ["Builder",()=>initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()})],
