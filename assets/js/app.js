@@ -327,8 +327,8 @@ function previewPath(path,base=""){
  const clean=String(path||"").trim().split("#")[0].split("?")[0];
  if(!clean)return "";
  const decoded=decodeURIComponent(clean);
- if(/^(?:[a-z]+:|\\/\\/|data:|blob:|#|mailto:|tel:|javascript:)/i.test(decoded))return "";
- const raw=decoded.replace(/^\\/+/, "");
+ if(/^(?:[a-z]+:|\/\/|data:|blob:|#|mailto:|tel:|javascript:)/i.test(decoded))return "";
+ const raw=decoded.replace(/^\/+/, "");
  const parts=(base?base.split("/").slice(0,-1):[]).concat(raw.split("/"));
  const out=[];
  for(const part of parts){
@@ -340,7 +340,7 @@ function previewPath(path,base=""){
 }
 function previewReference(value,base=""){
  const raw=String(value||"").trim();
- if(!raw||/^(?:[a-z]+:|\\/\\/|data:|blob:|#|mailto:|tel:|javascript:)/i.test(raw))return null;
+ if(!raw||/^(?:[a-z]+:|\/\/|data:|blob:|#|mailto:|tel:|javascript:)/i.test(raw))return null;
  const match=raw.match(/^([^?#]*)([?#].*)?$/);
  const path=previewPath(match?.[1]||raw,base);
  if(!path)return null;
@@ -348,18 +348,17 @@ function previewReference(value,base=""){
 }
 function rewritePreviewAssets(source,assetMap,base=""){
  let out=String(source||"");
- out=out.replace(/(\\b(?:src|href|poster|data-src|data-lazy-src|content)\\s*=\\s*["'])([^"']+)(["'])/gi,(m,p,v,s)=>{
+ out=out.replace(/(\b(?:src|href|poster|data-src|data-lazy-src|content)\s*=\s*["'])([^"']+)(["'])/gi,(m,p,v,s)=>{
   const ref=previewReference(v,base),url=ref&&assetMap.get(ref.path);
   return url?p+url+ref.suffix+s:m;
  });
- out=out.replace(/(\\burl\\(\\s*["']?)([^)"']+)(["']?\\s*\\))/gi,(m,p,v,s)=>{
+ out=out.replace(/(\burl\(\s*["']?)([^)"']+)(["']?\s*\))/gi,(m,p,v,s)=>{
   const ref=previewReference(v,base),url=ref&&assetMap.get(ref.path);
   return url?p+url+ref.suffix+s:m;
  });
  return out;
 }
-async function buildPreviewDocument(){
- const generation=++previewGeneration;
+async function buildPreviewDocument(generation){
  const index=state.files.find(x=>x.path==="index.html")?.content||"";
  if(!index)return "";
  const textByPath=new Map(state.files.map(x=>[x.path,x]));
@@ -414,7 +413,7 @@ async function buildPreviewDocument(){
  const html=doc.documentElement.outerHTML;
  let body=rewritePreviewAssets(html,assetMap,"index.html");
  const cssBlocks=localCss.map(file=>'<style data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path)+'</style>').join("");
- const jsBlocks=localJs.map(file=>'<script data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path).replace(/<\\/script/gi,"<\\\\/script")+'</script>').join("");
+ const jsBlocks=localJs.map(file=>'<script data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path).replace(/<\/script/gi,"<\\/script")+'</script>').join("");
  body=body.replace("</head>",cssBlocks+"</head>");
  body=body.replace("</body>",jsBlocks+"</body>");
  previewObjectUrls.push(...urls);
