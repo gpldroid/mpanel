@@ -14,6 +14,8 @@
 <form id="auth-form"><label>Email<input id="auth-email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
 <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••••"></label>
 <button class="btn primary full" id="auth-submit" type="submit">Sign in</button></form>
+<div class="auth-divider"><span>or</span></div>
+<button class="btn secondary full oauth-github" id="github-auth-btn" type="button"><i data-lucide="github"></i><span>Continue with GitHub</span></button>
 <button class="link-button" id="auth-toggle" type="button">Create a free account</button>
 <div class="connection-box" id="connection-box" aria-live="polite"><div class="connection-head"><span class="connection-dot" id="connection-dot"></span><strong id="connection-title">Connection not tested</strong></div><p class="tiny muted" id="connection-detail">Use the button below to test the Supabase connection from this browser.</p><button class="btn secondary full" id="connection-test" type="button">Test Supabase connection</button></div>
 <p class="tiny muted">Protected by Supabase Auth and PostgreSQL Row Level Security.</p></div></section>
@@ -51,5 +53,5 @@
 <div class="top-actions"><button class="icon-btn" id="theme-btn"><span data-lucide="sun"></span></button><button class="avatar" id="profile-btn"><span id="avatar-letter">U</span></button></div></header>
 <div class="content"><div id="view-dashboard" class="view"></div><div id="view-manager" class="view hidden"></div><div id="view-posts" class="view hidden"></div><div id="view-pages" class="view hidden"></div><div id="view-categories" class="view hidden"></div><div id="view-tags" class="view hidden"></div><div id="view-layout" class="view hidden"></div><div id="view-widgets" class="view hidden"></div><div id="view-navigation" class="view hidden"></div><div id="view-files" class="view hidden"></div><div id="view-github" class="view hidden"></div><div id="view-publishing" class="view hidden"></div><div id="view-theme" class="view hidden"></div><div id="view-builder" class="view hidden"></div><div id="view-sites" class="view hidden"></div><div id="view-domains" class="view hidden"></div><div id="view-seo" class="view hidden"></div><div id="view-monitoring" class="view hidden"></div><div id="view-analytics" class="view hidden"></div><div id="view-settings" class="view hidden"></div></div>
 </main></section><div id="modal-root"></div>
-<script src="https://unpkg.com/lucide@latest"></script><script type="module" src="assets/js/app.js?v=20260922-007"></script><script type="module" src="assets/js/platform.js?v=20260922-003"></script>
+<script src="https://unpkg.com/lucide@latest"></script><script type="module" src="assets/js/app.js?v=20260922-008"></script><script type="module" src="assets/js/platform.js?v=20260922-004"></script><script type="module" src="assets/js/auth-github.js?v=20260922-001"></script>
 </body></html>
