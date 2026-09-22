@@ -103,24 +103,61 @@ async function pushSiteToGitHub(){
     ctx.toast("Pushed "+files.length+" files to GitHub","success");
   }catch(e){ctx.toast("GitHub push failed: "+e.message)}
 }
+async function loadGitHubIntegration(){
+  const site=ctx.state.selectedSite;if(!site)return;
+  const r=await ctx.supabase.from("site_integrations").select("*").eq("site_id",site.id).eq("provider","github").maybeSingle();
+  if(r.error)return;
+  if(r.data&&r.data.github_repo){
+    ctx.state.github.repo={full_name:r.data.github_repo,branch:r.data.github_branch||"main"};
+  }else ctx.state.github.repo=null;
+}
+async function saveGitHubIntegration(repo,branch){
+  const site=ctx.state.selectedSite;if(!site)throw new Error("Select a website first.");
+  const payload={user_id:ctx.state.user.id,site_id:site.id,provider:"github",github_repo:repo,github_branch:branch||"main",enabled:true,updated_at:new Date().toISOString()};
+  const r=await ctx.supabase.from("site_integrations").upsert(payload,{onConflict:"site_id,provider"}).select().single();
+  if(r.error)throw r.error;
+  ctx.state.github.repo={full_name:repo,branch:branch||"main"};
+}
+async function publishGeneratedSite(files,message="mPanel: publish website"){
+  const repo=ctx.state.github.repo;
+  if(!repo)throw new Error("Choose and save a GitHub repository first.");
+  const [owner,name]=repo.full_name.split("/");
+  const ref=await githubRequest("/repos/"+owner+"/"+name+"/git/ref/heads/"+encodeURIComponent(repo.branch));
+  const parent=ref.object.sha;
+  const commit=await githubRequest("/repos/"+owner+"/"+name+"/git/commits/"+parent);
+  const entries=[];
+  for(const f of files){
+    if(!isTextPath(f.path))continue;
+    const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:encodeBase64(f.content),encoding:"base64"})});
+    entries.push({path:f.path,mode:"100644",type:"blob",sha:blob.sha});
+  }
+  const tree=await githubRequest("/repos/"+owner+"/"+name+"/git/trees",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({base_tree:commit.tree.sha,tree:entries})});
+  const created=await githubRequest("/repos/"+owner+"/"+name+"/git/commits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,tree:tree.sha,parents:[parent]})});
+  await githubRequest("/repos/"+owner+"/"+name+"/git/refs/heads/"+encodeURIComponent(repo.branch),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({sha:created.sha,force:false})});
+  return {sha:created.sha,files:entries.length,repository:repo.full_name,branch:repo.branch};
+}
 function renderGitHub(state){
   const el=document.querySelector("#view-github");if(!el)return;
-  const connected=!!state.github.connected;
-  el.innerHTML='<div class="toolbar"><div><h3>GitHub</h3><p class="muted">Connect GitHub to import repositories into File Manager and push edits back.</p></div><div class="workspace-actions">'+(connected?'<span class="connection-pill"><i></i>'+esc(state.github.login||"Connected")+'</span><button class="btn secondary" id="github-disconnect">Disconnect</button>':'<button class="btn primary" id="github-connect"><i data-lucide="github"></i>Connect GitHub</button>')+'</div></div>'+
-  '<div class="grid two-col"><section class="card"><h3>Repository workspace</h3><p class="muted">A GitHub connection lets mPanel read repository trees, import source files and write edited text files. No GitHub token is stored in the database.</p>'+
-  (connected?'<div class="github-repo-box"><span class="badge success">Connected</span><p class="tiny muted">Account: '+esc(state.github.login||"GitHub user")+'</p><button class="btn secondary" id="github-import-main"><i data-lucide="download"></i>Import project</button><button class="btn primary" id="github-push-main"><i data-lucide="upload"></i>Push current files</button></div>':'<div class="empty"><i data-lucide="github"></i><p>Connect GitHub to unlock repository access.</p></div>')+
-  '</section><section class="card"><h3>Security</h3><ul class="muted"><li>OAuth is handled by Supabase Auth.</li><li>Tokens are kept only in the browser session.</li><li>Supabase database stores repository metadata, not the GitHub token.</li><li>Write access requires GitHub authorization with repository write scope.</li></ul><p class="tiny muted">Before using this feature, enable GitHub OAuth in Supabase Authentication → Providers → GitHub and configure the OAuth callback URL.</p></section></div>';
+  const connected=!!state.github.connected, repo=state.github.repo;
+  el.innerHTML='<div class="toolbar"><div><h3>GitHub</h3><p class="muted">Repository connection, import, preview and atomic publishing.</p></div><div class="workspace-actions">'+(connected?'<span class="connection-pill"><i></i>'+esc(state.github.login||"Connected")+'</span><button class="btn secondary" id="github-disconnect">Disconnect</button>':'<button class="btn primary" id="github-connect"><i data-lucide="github"></i>Connect GitHub</button>')+'</div></div>'+
+  '<div class="grid two-col"><section class="card"><h3>Repository workspace</h3><p class="muted">Select the repository and branch used for imports and publishing.</p>'+
+  (connected?'<div class="form-grid"><label>Repository<select id="github-repo-select"><option value="">Loading repositories…</option></select></label><label>Branch<input id="github-branch" value="'+esc(repo?.branch||"main")+'"></label></div><div class="workspace-actions" style="margin-top:14px"><button class="btn secondary" id="github-refresh-repos"><i data-lucide="refresh-cw"></i>Refresh repositories</button><button class="btn primary" id="github-save-repo"><i data-lucide="save"></i>Save repository</button></div><div class="github-repo-box">'+(repo?'<span class="badge success">Selected: '+esc(repo.full_name)+' / '+esc(repo.branch)+'</span>':'<span class="badge warning">No repository selected</span>')+'<div class="workspace-actions"><button class="btn secondary" id="github-import-main"><i data-lucide="download"></i>Import project</button><button class="btn primary" id="github-publish-main"><i data-lucide="rocket"></i>Publish website</button></div></div>':'<div class="empty"><i data-lucide="github"></i><p>Connect GitHub to unlock repository access.</p></div>')+
+  '</section><section class="card"><h3>Publishing pipeline</h3><ol class="muted"><li>Content → Posts / Pages</li><li>SEO → metadata / sitemap / robots</li><li>Design → Layout / Widgets / Theme</li><li>Build → static HTML files</li><li>GitHub → one atomic commit</li></ol><p class="tiny muted">Publishing uses GitHub Git Trees + Commit + Ref APIs so a release is grouped into one commit rather than one commit per file.</p></section></div>';
   document.querySelector("#github-connect")?.addEventListener("click",connectGitHub);
   document.querySelector("#github-disconnect")?.addEventListener("click",disconnectGitHub);
   document.querySelector("#github-import-main")?.addEventListener("click",openGitHubImport);
-  document.querySelector("#github-push-main")?.addEventListener("click",pushSiteToGitHub);
+  document.querySelector("#github-refresh-repos")?.addEventListener("click",async()=>{try{await fillRepoSelect()}catch(e){ctx.toast(e.message)}});
+  document.querySelector("#github-save-repo")?.addEventListener("click",async()=>{try{const sel=document.querySelector("#github-repo-select"),repoName=sel?.value,branch=document.querySelector("#github-branch")?.value.trim()||"main";if(!repoName)throw new Error("Select a repository.");await saveGitHubIntegration(repoName,branch);ctx.toast("GitHub repository saved","success");renderGitHub(ctx.state)}catch(e){ctx.toast("Save failed: "+e.message)}});
+  document.querySelector("#github-publish-main")?.addEventListener("click",()=>ctx.publishWebsite?.());
+  async function fillRepoSelect(){const sel=document.querySelector("#github-repo-select");if(!sel)return;const repos=await loadRepos();sel.innerHTML='<option value="">Select repository</option>'+repoOptions(repos,ctx.state.github.repo?.full_name||"");if(ctx.state.github.repo)sel.value=ctx.state.github.repo.full_name}
+  if(connected)fillRepoSelect().catch(e=>ctx.toast("Repository load failed: "+e.message));
 }
 function initGitHub(c){
   ctx=c;
   ctx.openModal=ctx.openModal||function(html){document.querySelector("#modal-root").innerHTML=html};
   ctx.closeModal=ctx.closeModal||function(){document.querySelector("#modal-root").innerHTML=""};
   ctx.reloadSiteFiles=ctx.reloadSiteFiles||async function(){if(!ctx.state.selectedSite)return;const r=await ctx.supabase.from("site_files").select("*").eq("site_id",ctx.state.selectedSite.id).order("path");ctx.state.files=r.data||[]};
-  ctx.supabase.auth.getSession().then(({data})=>syncSession(data.session)).catch(()=>{});
+  ctx.supabase.auth.getSession().then(async({data})=>{await syncSession(data.session);await loadGitHubIntegration();renderGitHub(ctx.state)}).catch(()=>{});
   ctx.supabase.auth.onAuthStateChange((_event,session)=>setTimeout(()=>syncSession(session),0));
 }
-export {renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub};
+export {renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration};
