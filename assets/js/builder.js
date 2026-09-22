@@ -81,7 +81,10 @@ function postContent(p,state,current){
  const fallback="<article><header><h1>"+esc(p.title)+"</h1>"+(p.published_at?"<small>"+esc(new Date(p.published_at).toLocaleDateString())+"</small>":"")+"</header><div>"+p.content+"</div></article>";
  return renderTemplateContent(state,"post",fallback,current,{content:fallback});
 }
-function pageContent(p){return '<article><h1>'+esc(p.title)+'</h1><div>'+p.content+'</div></article>'}
+function pageContent(p,state,current){
+ const fallback="<article><h1>"+esc(p.title)+"</h1><div>"+p.content+"</div></article>";
+ return renderTemplateContent(state,"page",fallback,current,{content:fallback});
+}
 
 export function buildSiteFiles(state){
  const files=[],published=(state.posts||[]).filter(p=>p.status==="published"),pages=(state.pages||[]).filter(p=>p.status==="published");
