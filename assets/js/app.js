@@ -320,16 +320,119 @@ async function saveSelectedFile(){
  toast("File saved and previous version recorded","success");renderFiles();renderTheme();renderManager();updatePreview();
 }
 function downloadAssetBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.split("/").pop()||"asset";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}
-function previewDocument(){
- const html=state.files.find(x=>x.path==="index.html")?.content||"";
- const css=state.files.find(x=>x.path==="style.css")?.content||"";
- const js=state.files.find(x=>x.path==="script.js")?.content||"";
- const withCss=html.replace('<link rel="stylesheet" href="style.css">','<style>'+css+'</style>').replace('<link rel="stylesheet" href="./style.css">','<style>'+css+'</style>');
- return withCss.replace('<script src="script.js"></script>','<script>'+js+'</script>').replace('<script src="./script.js"></script>','<script>'+js+'</script>');
+let previewGeneration=0;
+let previewObjectUrls=[];
+
+function previewPath(path,base=""){
+ const clean=String(path||"").trim().split("#")[0].split("?")[0];
+ if(!clean)return "";
+ const decoded=decodeURIComponent(clean);
+ if(/^(?:[a-z]+:|\\/\\/|data:|blob:|#|mailto:|tel:|javascript:)/i.test(decoded))return "";
+ const raw=decoded.replace(/^\\/+/, "");
+ const parts=(base?base.split("/").slice(0,-1):[]).concat(raw.split("/"));
+ const out=[];
+ for(const part of parts){
+  if(!part||part===".")continue;
+  if(part===".."){out.pop();continue}
+  out.push(part);
+ }
+ return out.join("/");
 }
-function updatePreview(){
+function previewReference(value,base=""){
+ const raw=String(value||"").trim();
+ if(!raw||/^(?:[a-z]+:|\\/\\/|data:|blob:|#|mailto:|tel:|javascript:)/i.test(raw))return null;
+ const match=raw.match(/^([^?#]*)([?#].*)?$/);
+ const path=previewPath(match?.[1]||raw,base);
+ if(!path)return null;
+ return {path,suffix:match?.[2]||""};
+}
+function rewritePreviewAssets(source,assetMap,base=""){
+ let out=String(source||"");
+ out=out.replace(/(\\b(?:src|href|poster|data-src|data-lazy-src|content)\\s*=\\s*["'])([^"']+)(["'])/gi,(m,p,v,s)=>{
+  const ref=previewReference(v,base),url=ref&&assetMap.get(ref.path);
+  return url?p+url+ref.suffix+s:m;
+ });
+ out=out.replace(/(\\burl\\(\\s*["']?)([^)"']+)(["']?\\s*\\))/gi,(m,p,v,s)=>{
+  const ref=previewReference(v,base),url=ref&&assetMap.get(ref.path);
+  return url?p+url+ref.suffix+s:m;
+ });
+ return out;
+}
+async function buildPreviewDocument(){
+ const generation=++previewGeneration;
+ const index=state.files.find(x=>x.path==="index.html")?.content||"";
+ if(!index)return "";
+ const textByPath=new Map(state.files.map(x=>[x.path,x]));
+ const binaryByPath=new Map((state.binaryFiles||[]).map(x=>[x.path,x]));
+ const localCss=[];
+ const localJs=[];
+ const parser=new DOMParser();
+ const doc=parser.parseFromString(index,"text/html");
+ const links=[...doc.querySelectorAll('link[rel~="stylesheet"][href]')];
+ for(const link of links){
+  const ref=previewReference(link.getAttribute("href"),"index.html");
+  const file=ref&&textByPath.get(ref.path);
+  if(file){
+   localCss.push({path:file.path,content:file.content||""});
+   link.remove();
+  }
+ }
+ if(!localCss.length){
+  const css=textByPath.get("style.css");
+  if(css)localCss.push({path:css.path,content:css.content||""});
+ }
+ const scripts=[...doc.querySelectorAll('script[src]')];
+ for(const script of scripts){
+  const ref=previewReference(script.getAttribute("src"),"index.html");
+  const file=ref&&textByPath.get(ref.path);
+  if(file){
+   localJs.push({path:file.path,content:file.content||""});
+   script.remove();
+  }
+ }
+ if(!localJs.length){
+  const js=textByPath.get("script.js");
+  if(js)localJs.push({path:js.path,content:js.content||""});
+ }
+ const assetMap=new Map();
+ const urls=[];
+ for(const asset of binaryByPath.values()){
+  try{
+   const result=await supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);
+   if(result.error)throw result.error;
+   const url=URL.createObjectURL(result.data);
+   assetMap.set(asset.path,url);
+   urls.push(url);
+  }catch(error){
+   console.warn("[mPanel preview asset]",asset.path,error);
+  }
+ }
+ if(generation!==previewGeneration){
+  urls.forEach(url=>URL.revokeObjectURL(url));
+  return "";
+ }
+ const html=doc.documentElement.outerHTML;
+ let body=rewritePreviewAssets(html,assetMap,"index.html");
+ const cssBlocks=localCss.map(file=>'<style data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path)+'</style>').join("");
+ const jsBlocks=localJs.map(file=>'<script data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path).replace(/<\\/script/gi,"<\\\\/script")+'</script>').join("");
+ body=body.replace("</head>",cssBlocks+"</head>");
+ body=body.replace("</body>",jsBlocks+"</body>");
+ previewObjectUrls.push(...urls);
+ while(previewObjectUrls.length>80)URL.revokeObjectURL(previewObjectUrls.shift());
+ return body;
+}
+async function updatePreview(){
  const frame=$("#workspace-preview")||$("#theme-preview");if(!frame)return;
- frame.srcdoc=previewDocument();
+ const generation=++previewGeneration;
+ frame.dataset.previewGeneration=String(generation);
+ try{
+  const html=await buildPreviewDocument();
+  if(generation!==previewGeneration)return;
+  frame.srcdoc=html;
+ }catch(error){
+  console.error("[mPanel preview]",error);
+  if(generation===previewGeneration)frame.srcdoc='<body style="font-family:system-ui;padding:24px"><h3>Preview unavailable</h3><p>Unable to build the local workspace preview.</p></body>';
+ }
 }
 function openNewFileModal(){
  $("#modal-root").innerHTML='<div class="modal-backdrop"><div class="modal file-modal"><div class="modal-head"><h3>New website file</h3><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="new-file-form"><label>File path<input name="path" required pattern="[A-Za-z0-9_./-]+" placeholder="pages/about.html"></label><label style="margin-top:14px">Type<select name="mime"><option value="text/html">HTML</option><option value="text/css">CSS</option><option value="text/javascript">JavaScript</option><option value="text/plain">Text</option></select></label><label style="margin-top:14px">Initial content<textarea name="content" placeholder="Start writing…"></textarea></label><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Create file</button></div></form></div></div>';
