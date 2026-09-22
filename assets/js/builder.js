@@ -36,8 +36,9 @@ function region(state,key,current){
  if(sec&&!sec.enabled)return "";
  return (state.design?.widgets||[]).filter(w=>w.enabled&&w.section_key===key).sort((a,b)=>a.position-b.position).map(w=>'<section class="widget"><h3>'+esc(w.title||"")+'</h3>'+widgetHtml(w,state,current)+"</section>").join("");
 }
-function blockHtml(b,state,current){
+function blockHtml(b,state,current,context={}){
  const c=b.content||{};
+ if(b.block_type==="content")return context.content||"";
  if(b.block_type==="hero")return '<section class="builder-hero"><h1>'+esc(c.title||"")+'</h1><p>'+esc(c.text||"")+'</p>'+(c.button_text?'<a class="btn" href="'+esc(normalizeLink(c.button_url||"#",current))+'">'+esc(c.button_text)+'</a>':"")+"</section>";
  if(b.block_type==="text")return "<section><p>"+esc(c.text||"")+"</p></section>";
  if(b.block_type==="html"||b.block_type==="custom")return c.html||"";
@@ -47,10 +48,10 @@ function blockHtml(b,state,current){
  if(b.block_type==="posts")return '<section><h2>'+esc(c.title||"Latest posts")+'</h2><div class="post-list">'+(state.posts||[]).filter(p=>p.status==="published").slice(0,Number(c.limit)||6).map(p=>'<article class="post-card"><h3><a href="'+esc(href("posts/"+slug(p.slug)+".html",current))+'">'+esc(p.title)+'</a></h3><p>'+esc(p.excerpt||p.meta_description||"")+"</p></article>").join("")+"</div></section>";
  return "";
 }
-function templateBlocks(state,type,area){
+function templateBlocks(state,type,area,context={}){
  const t=(state.builderTemplates||[]).find(x=>x.template_type===type&&x.is_default)|| (state.builderTemplates||[]).find(x=>x.template_type===type)|| (state.builderTemplates||[]).find(x=>x.template_type==="site"&&x.is_default);
  if(!t)return "";
- return (state.builderBlocks||[]).filter(x=>x.template_id===t.id&&x.enabled&&(!area||x.area===area)).sort((a,b)=>a.position-b.position).map(x=>blockHtml(x,state,"index.html")).join("");
+ return (state.builderBlocks||[]).filter(x=>x.template_id===t.id&&x.enabled&&(!area||x.area===area)).sort((a,b)=>a.position-b.position).map(x=>blockHtml(x,state,context.current||"index.html",context)).join("");
 }
 function baseCss(t){
  return ':root{--primary:'+t.primary+';--accent:'+t.accent+';--bg:'+t.bg+';--surface:'+t.surface+';--text:'+t.text+';--radius:'+t.radius+'px}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:'+t.font+',system-ui,sans-serif;line-height:1.7}.container{width:min('+t.width+'px,calc(100% - 32px));margin:auto}.site-header{background:var(--surface);border-bottom:1px solid #e2e8f0}.site-header .container{min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{font-weight:900;color:var(--text);text-decoration:none}.site-header nav{display:flex;gap:16px;flex-wrap:wrap}.site-header nav a,.widget a,a{color:var(--primary);text-decoration:none}.page-grid{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:28px;padding-top:32px;padding-bottom:40px}.content{background:var(--surface);padding:28px;border-radius:var(--radius)}aside{display:grid;align-content:start;gap:16px}.widget{background:var(--surface);padding:18px;border-radius:var(--radius);border:1px solid #e2e8f0}.widget h3{margin-top:0}.widget-list{display:grid;gap:7px}.social-links{display:flex;gap:10px;flex-wrap:wrap}.site-footer{padding:28px 0;background:var(--surface);border-top:1px solid #e2e8f0}.post-list{display:grid;gap:20px}.post-card{padding:18px;border:1px solid #e2e8f0;border-radius:var(--radius)}input,button{font:inherit;padding:10px;border:1px solid #cbd5e1;border-radius:8px}button,.btn{background:var(--primary);color:#fff;cursor:pointer}img{max-width:100%;height:auto}.builder-hero,.builder-cta{padding:34px;border-radius:var(--radius);background:linear-gradient(135deg,var(--surface),#eef2ff);margin-bottom:18px}.builder-menu{display:flex;gap:16px;flex-wrap:wrap;padding:12px 0}.builder-menu a{color:var(--primary)}@media(max-width:800px){.page-grid{grid-template-columns:1fr}.site-header .container{align-items:flex-start;flex-direction:column;padding:14px 0}}'+t.custom;
@@ -72,11 +73,14 @@ function shell(state,title,description,content,current){
  const cssHref=href("style.css",current);
  return '<!doctype html><html lang="'+esc(state.siteSeo?.language||"en")+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><meta name="description" content="'+esc(description)+'"><meta name="robots" content="'+robots+'">'+(canonical?'<link rel="canonical" href="'+esc(canonical)+'">':"")+(seo.og_image?'<meta property="og:image" content="'+esc(seo.og_image)+'">':"")+'<meta property="og:title" content="'+esc(seo.og_title||title)+'"><meta property="og:description" content="'+esc(seo.og_description||description)+'"><meta name="twitter:card" content="'+esc(seo.twitter_card||"summary_large_image")+'"><meta name="twitter:title" content="'+esc(seo.twitter_title||title)+'"><meta name="twitter:description" content="'+esc(seo.twitter_description||description)+'">'+(seo.twitter_image?'<meta name="twitter:image" content="'+esc(seo.twitter_image)+'">':"")+'<script type="application/ld+json">'+schema.replace(/<\/script/gi,"<\\/script")+'</script>'+(seo.custom_head||"")+'<link rel="stylesheet" href="'+esc(cssHref)+'"></head><body><header class="site-header"><div class="container"><a class="brand" href="'+esc(href("index.html",current))+'">'+esc(state.selectedSite?.name||"Website")+'</a><nav>'+navHtml(state,current)+'</nav></div></header><div class="container page-grid"><main class="content">'+content+'</main><aside>'+region(state,"sidebar",current)+'</aside></div><footer class="site-footer"><div class="container">'+region(state,"footer",current)+'<small>© '+new Date().getFullYear()+" "+esc(state.selectedSite?.name||"Website")+'</small></div></footer>'+analyticsTracker(state)+'</body></html>';
 }
-function renderTemplateContent(state,type,fallback,current){
- const generated=templateBlocks(state,type);
+function renderTemplateContent(state,type,fallback,current,context={}){
+ const generated=templateBlocks(state,type,null,{...context,current});
  return generated||fallback;
 }
-function postContent(p,state,current){return '<article><header><h1>'+esc(p.title)+'</h1>'+(p.published_at?'<small>'+esc(new Date(p.published_at).toLocaleDateString())+"</small>":"")+'</header><div>'+p.content+'</div></article>'}
+function postContent(p,state,current){
+ const fallback="<article><header><h1>"+esc(p.title)+"</h1>"+(p.published_at?"<small>"+esc(new Date(p.published_at).toLocaleDateString())+"</small>":"")+"</header><div>"+p.content+"</div></article>";
+ return renderTemplateContent(state,"post",fallback,current,{content:fallback});
+}
 function pageContent(p){return '<article><h1>'+esc(p.title)+'</h1><div>'+p.content+'</div></article>'}
 
 export function buildSiteFiles(state){
