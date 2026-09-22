@@ -78,9 +78,35 @@ async function moveMenu(id,dir){
   const menu=currentMenu();if(!menu)return;const a=ctx.state.design.menuItems.filter(x=>x.menu_id===menu.id),i=a.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=a.length)return;const tmp=a[i];a[i]=a[j];a[j]=tmp;for(let k=0;k<a.length;k++)await ctx.supabase.from("menu_items").update({position:k}).eq("id",a[k].id);ctx.state.design.menuItems=ctx.state.design.menuItems.map(x=>{const n=a.find(v=>v.id===x.id);return n||x});renderDesignViews();
 }
 async function deleteMenuItem(id){if(!confirm("Delete this link?"))return;const r=await ctx.supabase.from("menu_items").delete().eq("id",id);if(r.error){ctx.toast(r.error.message);return}ctx.state.design.menuItems=ctx.state.design.menuItems.filter(x=>x.id!==id);renderDesignViews()}
+function themePresetView(){
+ const presets=ctx.state.themePresets||[];
+ return '<section class="card theme-presets-card"><div class="section-head"><div><h3>Theme Presets</h3><p class="muted">Save, apply or remove reusable visual configurations.</p></div><div class="workspace-actions"><button class="btn secondary" id="theme-save-preset"><i data-lucide="bookmark-plus"></i>Save current</button><button class="btn primary" id="theme-new-preset"><i data-lucide="plus"></i>New preset</button></div></div><div class="site-list">'+(presets.length?presets.map(p=>'<div class="site-row"><div><strong>'+esc(p.name)+'</strong><small class="muted" style="display:block">'+esc(p.slug)+'</small></div><div class="workspace-actions"><button class="btn secondary theme-apply-preset" data-id="'+p.id+'">Apply</button><button class="icon-btn theme-delete-preset" data-id="'+p.id+'" title="Delete"><i data-lucide="trash-2"></i></button></div></div>').join(""):'<div class="empty">No presets yet. Save your current theme as the first preset.</div>')+'</div></section>';
+}
 function themeView(){
   const t=ctx.state.design.theme||{};
-  return '<section class="card theme-settings-card"><div class="section-head"><div><h3>Theme settings</h3><p class="muted">Global visual settings for the selected website.</p></div><span class="badge neutral">Design tokens</span></div><form id="theme-settings-form"><div class="form-grid"><label>Primary color<input type="color" name="primary_color" value="'+esc(t.primary_color||"#4f46e5")+'"></label><label>Accent color<input type="color" name="accent_color" value="'+esc(t.accent_color||"#7c3aed")+'"></label><label>Background<input type="color" name="background_color" value="'+esc(t.background_color||"#f6f8fc")+'"></label><label>Surface<input type="color" name="surface_color" value="'+esc(t.surface_color||"#ffffff")+'"></label><label>Text<input type="color" name="text_color" value="'+esc(t.text_color||"#111827")+'"></label><label>Font family<select name="font_family"><option>system-ui</option><option>Inter</option><option>Arial</option><option>Georgia</option><option>Verdana</option></select></label><label>Container width<input type="number" name="container_width" min="800" max="1800" value="'+(t.container_width||1200)+'"></label><label>Border radius<input type="number" name="border_radius" min="0" max="40" value="'+(t.border_radius||16)+'"></label><label class="full-field">Custom CSS<textarea name="custom_css" rows="6" class="cms-code">'+esc(t.custom_css||"")+'</textarea></label></div><div class="modal-actions"><button class="btn primary">Save theme settings</button></div></form></section>';
+  return themePresetView()+'<section class="card theme-settings-card"><div class="section-head"><div><h3>Theme settings</h3><p class="muted">Global visual settings for the selected website.</p></div><span class="badge neutral">Design tokens</span></div><form id="theme-settings-form"><div class="form-grid"><label>Primary color<input type="color" name="primary_color" value="'+esc(t.primary_color||"#4f46e5")+'"></label><label>Accent color<input type="color" name="accent_color" value="'+esc(t.accent_color||"#7c3aed")+'"></label><label>Background<input type="color" name="background_color" value="'+esc(t.background_color||"#f6f8fc")+'"></label><label>Surface<input type="color" name="surface_color" value="'+esc(t.surface_color||"#ffffff")+'"></label><label>Text<input type="color" name="text_color" value="'+esc(t.text_color||"#111827")+'"></label><label>Font family<select name="font_family"><option '+(t.font_family==="system-ui"?"selected":"")+'>system-ui</option><option '+(t.font_family==="Inter"?"selected":"")+'>Inter</option><option '+(t.font_family==="Arial"?"selected":"")+'>Arial</option><option '+(t.font_family==="Georgia"?"selected":"")+'>Georgia</option><option '+(t.font_family==="Verdana"?"selected":"")+'>Verdana</option></select></label><label>Container width<input type="number" name="container_width" min="800" max="1800" value="'+(t.container_width||1200)+'"></label><label>Border radius<input type="number" name="border_radius" min="0" max="40" value="'+(t.border_radius||16)+'"></label><label class="full-field">Custom CSS<textarea name="custom_css" rows="6" class="cms-code">'+esc(t.custom_css||"")+'</textarea></label></div><div class="modal-actions"><button class="btn primary">Save theme settings</button></div></form></section>';
+}
+async function saveThemePreset(){
+ const name=prompt("Preset name","My Theme");if(!name)return;
+ const slug=name.toLowerCase().trim().replace(/[^a-z0-9\u0600-\u06ff]+/g,"-").replace(/^-+|-+$/g,"")||crypto.randomUUID();
+ const r=await ctx.supabase.from("theme_presets").insert({user_id:ctx.state.user.id,name,slug,settings:ctx.state.design.theme||{},is_system:false}).select().single();
+ if(r.error){ctx.toast(r.error.message);return}
+ ctx.state.themePresets=[...(ctx.state.themePresets||[]),r.data].sort((a,b)=>a.name.localeCompare(b.name));renderDesignViews();ctx.toast("Theme preset saved","success");
+}
+async function createThemePreset(){await saveThemePreset()}
+async function applyThemePreset(id){
+ const p=(ctx.state.themePresets||[]).find(x=>x.id===id);if(!p)return;
+ const t=p.settings||{};
+ const r=await ctx.supabase.from("theme_settings").upsert({...t,user_id:ctx.state.user.id,site_id:ctx.state.selectedSite.id},{onConflict:"site_id"}).select().single();
+ if(r.error){ctx.toast(r.error.message);return}
+ ctx.state.design.theme=r.data;ctx.state.activeThemePresetId=p.id;renderDesignViews();ctx.toast("Theme preset applied","success");
+}
+async function deleteThemePreset(id){
+ const p=(ctx.state.themePresets||[]).find(x=>x.id===id);if(!p||p.is_system)return;
+ if(!confirm("Delete this theme preset?"))return;
+ const r=await ctx.supabase.from("theme_presets").delete().eq("id",id);
+ if(r.error){ctx.toast(r.error.message);return}
+ ctx.state.themePresets=ctx.state.themePresets.filter(x=>x.id!==id);if(ctx.state.activeThemePresetId===id)ctx.state.activeThemePresetId=null;renderDesignViews();ctx.toast("Theme preset deleted","success");
 }
 function renderDesignViews(){
   const s=ctx.state.selectedSite;
@@ -108,6 +134,7 @@ function bind(){
   each(".menu-up",b=>b.onclick=()=>moveMenu(b.dataset.id,-1));
   each(".menu-down",b=>b.onclick=()=>moveMenu(b.dataset.id,1));
   qs("#menu-select")?.addEventListener("change",e=>{const selected=ctx.state.design.menus.find(x=>x.id===e.target.value);if(selected){ctx.state.design.menus=[selected,...ctx.state.design.menus.filter(x=>x.id!==selected.id)]}renderDesignViews()});
+  qs("#theme-save-preset")?.addEventListener("click",saveThemePreset);qs("#theme-new-preset")?.addEventListener("click",createThemePreset);each(".theme-apply-preset",b=>b.onclick=()=>applyThemePreset(b.dataset.id));each(".theme-delete-preset",b=>b.onclick=()=>deleteThemePreset(b.dataset.id));
   qs("#theme-settings-form")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target),payload={primary_color:f.get("primary_color"),accent_color:f.get("accent_color"),background_color:f.get("background_color"),surface_color:f.get("surface_color"),text_color:f.get("text_color"),font_family:f.get("font_family"),container_width:Number(f.get("container_width")),border_radius:Number(f.get("border_radius")),custom_css:f.get("custom_css")};const r=await ctx.supabase.from("theme_settings").upsert({...payload,user_id:ctx.state.user.id,site_id:ctx.state.selectedSite.id},{onConflict:"site_id"}).select().single();if(r.error){ctx.toast(r.error.message);return}ctx.state.design.theme=r.data;ctx.closeModal();renderDesignViews();ctx.toast("Theme settings saved","success")});
 }
 function renderDesign(state,supabase){
