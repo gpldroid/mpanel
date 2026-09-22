@@ -1,11 +1,25 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
-import { renderGitHub, initGitHub, openGitHubImport, pushSiteToGitHub, publishGeneratedSite, loadGitHubIntegration } from "./integrations/github.js";
-import { renderDesign, initDesign } from "./design/design.js";
-import { buildSiteFiles, buildPreview } from "./builder.js";
-import { renderAnalytics, initAnalytics } from "./analytics.js";
-import { renderBuilder, initBuilder } from "./builder-ui.js";
+let renderGitHub=()=>{},initGitHub=()=>{},openGitHubImport=()=>{},pushSiteToGitHub=()=>{},publishGeneratedSite=async()=>{throw new Error("GitHub module is not ready.")},loadGitHubIntegration=async()=>{};
+let renderDesign=()=>{},initDesign=()=>{};
+let buildSiteFiles=()=>({}),buildPreview=()=>{};
+let renderAnalytics=()=>{},initAnalytics=()=>{};
+let renderBuilder=()=>{},initBuilder=()=>{};
 
+async function loadFeatureModules(){
+  const [github,design,builder,analytics,builderUi]=await Promise.all([
+    import("./integrations/github.js"),
+    import("./design/design.js"),
+    import("./builder.js"),
+    import("./analytics.js"),
+    import("./builder-ui.js")
+  ]);
+  ({renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration}=github);
+  ({renderDesign,initDesign}=design);
+  ({buildSiteFiles,buildPreview}=builder);
+  ({renderAnalytics,initAnalytics}=analytics);
+  ({renderBuilder,initBuilder}=builderUi);
+}
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
 window.__mPanelState=state;
@@ -106,7 +120,15 @@ async function loadData(){
  if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error)); if(d.error&&d.error.code!=="PGRST116")toast(authError(d.error)); if(e.error)toast(authError(e.error));
  state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];const savedSiteId=localStorage.getItem(SITE_CONTEXT_KEY);if(savedSiteId&&state.sites.some(x=>x.id===savedSiteId))state.selectedSite=state.sites.find(x=>x.id===savedSiteId);else if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;if(state.selectedSite)localStorage.setItem(SITE_CONTEXT_KEY,state.selectedSite.id);else localStorage.removeItem(SITE_CONTEXT_KEY);const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle()]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;const [bt,bb,rr,tp]=await Promise.all([supabase.from("builder_templates").select("*").eq("site_id",siteId).order("created_at",{ascending:true}),supabase.from("builder_blocks").select("*").eq("site_id",siteId).order("position",{ascending:true}),supabase.from("seo_redirects").select("*").eq("site_id",siteId).order("created_at",{ascending:false}),supabase.from("theme_presets").select("*").eq("user_id",state.user.id).order("name")]);state.builderTemplates=bt.data||[];state.builderBlocks=bb.data||[];state.redirects=rr.data||[];state.themePresets=tp.data||[];}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;}await loadCms();await loadGitHubIntegration();renderAll();
 }
-function renderAll(){renderSiteContext();renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderBuilder();renderPublishing();renderAnalytics();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
+function renderAll(){
+ renderSiteContext();renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");
+ try{renderGitHub(state)}catch(error){console.warn("[mPanel GitHub render]",error)}
+ try{renderDesign(state,supabase)}catch(error){console.warn("[mPanel design render]",error)}
+ try{renderBuilder()}catch(error){console.warn("[mPanel builder render]",error)}
+ renderPublishing();
+ try{renderAnalytics()}catch(error){console.warn("[mPanel analytics render]",error)}
+ $("#plan-usage").textContent=state.sites.length+" / 3 sites";icons();
+}
 
 function renderDashboard(){
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
@@ -559,10 +581,18 @@ $("#theme-btn").onclick=toggleTheme;
 $("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");
 $("#profile-btn").onclick=(event)=>{event.stopPropagation();toggleAccountMenu()};
 document.addEventListener("click",event=>{if(!event.target.closest(".account-wrap"))closeAccountMenu()});
-initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()});
-initDesign({supabase,state,showView,toast,renderAll,icons});
-initAnalytics({supabase,state,showView,toast,renderAll,icons});
-initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()});
+async function initializeFeatureModules(){
+ try{
+  await loadFeatureModules();
+  initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()});
+  initDesign({supabase,state,showView,toast,renderAll,icons});
+  initAnalytics({supabase,state,showView,toast,renderAll,icons});
+  initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()});
+ }catch(error){
+  console.error("[mPanel feature boot]",error);
+  toast("Some dashboard modules could not load. Core account access remains available.","error");
+ }
+}
 
 async function handleAuth(){
  try{
@@ -596,4 +626,6 @@ async function handleAuth(){
  }
 }
 supabase.auth.onAuthStateChange((event,session)=>{setTimeout(()=>{if(session&&!state.user)handleAuth();if(event==="SIGNED_OUT"){state.user=null;handleAuth()}},0)});
-handleAuth().catch(error=>toast(authError(error)));icons();
+await initializeFeatureModules();
+handleAuth().catch(error=>toast(authError(error)));
+icons();
