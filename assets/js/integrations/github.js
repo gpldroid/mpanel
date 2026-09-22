@@ -51,36 +51,43 @@ async function openGitHubImport(){
   if(!site){ctx.showView("sites");ctx.toast("Select a website first.");return}
   try{
     const repos=await loadRepos();
-    ctx.openModal('<div class="modal-backdrop"><div class="modal github-modal"><div class="modal-head"><div><h3>Import project from GitHub</h3><p class="muted">Import text source files into the selected mPanel website.</p></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="github-import-form"><label>Repository<select name="repo">'+repoOptions(repos,ctx.state.github.repo?.full_name||"")+'</select></label><label style="margin-top:14px">Branch<input name="branch" value="" placeholder="default branch"></label><div class="github-import-info"><span class="badge neutral">HTML / CSS / JS / JSON / Markdown</span><span class="badge neutral">Binary assets are skipped</span></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button class="btn primary">Import project</button></div></form></div></div>');
+    ctx.openModal('<div class="modal-backdrop"><div class="modal github-modal"><div class="modal-head"><div><h3>Import project from GitHub</h3><p class="muted">Preview files, choose what to import, and protect generated files from accidental overwrite.</p></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="github-import-form"><label>Repository<select name="repo">'+repoOptions(repos,ctx.state.github.repo?.full_name||"")+'</select></label><label style="margin-top:14px">Branch<input name="branch" value="" placeholder="default branch"></label><div class="form-grid" style="margin-top:14px"><label>Search files<input name="search" placeholder="index.html, css, js…"></label><label>Import mode<select name="mode"><option value="merge">Merge — keep existing files</option><option value="replace">Replace selected files</option></select></label></div><div id="github-import-summary" class="github-import-info"><span class="badge neutral">Choose a repository to scan</span></div><div id="github-import-files" class="file-list" style="max-height:260px;margin-top:12px"></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button type="button" class="btn secondary" id="scan-github">Scan repository</button><button class="btn primary">Import selected</button></div></form></div></div>');
     ctx.icons();
-    const form=document.querySelector("#github-import-form"),select=form.elements.repo,branch=form.elements.branch;
+    const form=document.querySelector("#github-import-form"),select=form.elements.repo,branch=form.elements.branch,search=form.elements.search,mode=form.elements.mode;
+    const filesBox=document.querySelector("#github-import-files"),summary=document.querySelector("#github-import-summary");
+    let entries=[];
     const setBranch=()=>{const o=select.options[select.selectedIndex];branch.value=o?.dataset.default||"main"};
-    select.onchange=setBranch;setBranch();
-    document.querySelector("#close-modal").onclick=ctx.closeModal;document.querySelector("#cancel-modal").onclick=ctx.closeModal;
-    form.onsubmit=async e=>{
-      e.preventDefault();const full=select.value,br=branch.value.trim()||"main";const [owner,name]=full.split("/");
+    const renderEntries=()=>{
+      const q=search.value.trim().toLowerCase(),shown=entries.filter(x=>!q||x.path.toLowerCase().includes(q));
+      summary.innerHTML='<span class="badge success">'+shown.length+' selectable text files</span><span class="badge neutral">Max 1 MB/file</span><span class="badge neutral">'+(mode.value==="merge"?"Existing files are preserved":"Selected files overwrite matching paths")+'</span>';
+      filesBox.innerHTML=shown.length?shown.slice(0,400).map(x=>'<label class="check"><input type="checkbox" name="path" value="'+esc(x.path)+'" checked><span><strong>'+esc(x.path)+'</strong><small class="muted"> '+Math.round((x.size||0)/1024)+' KB</small></span></label>').join(""):'<div class="empty">No matching files.</div>';
+    };
+    const scan=async()=>{
+      const full=select.value,br=branch.value.trim()||"main";if(!full)throw new Error("Select a repository.");
+      const [owner,name]=full.split("/");
       const tree=await githubRequest("/repos/"+owner+"/"+name+"/git/trees/"+encodeURIComponent(br)+"?recursive=1");
-      const entries=(tree.tree||[]).filter(x=>x.type==="blob"&&isTextPath(x.path)).slice(0,400);
-      if(!entries.length)throw new Error("No supported text files were found in this repository.");
-      const files=[];
-      for(let i=0;i<entries.length;i++){
-        const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs/"+entries[i].sha);
-        if(blob.encoding!=="base64")continue;
-        try{files.push({user_id:ctx.state.user.id,site_id:site.id,path:entries[i].path,content:decodeBase64(blob.content),mime_type:mime(entries[i].path),is_protected:entries[i].path==="index.html"})}catch{}
+      entries=(tree.tree||[]).filter(x=>x.type==="blob"&&isTextPath(x.path)&&x.size<=1024*1024);
+      renderEntries();
+    };
+    select.onchange=setBranch;setBranch();search.oninput=renderEntries;mode.onchange=renderEntries;
+    document.querySelector("#close-modal").onclick=ctx.closeModal;document.querySelector("#cancel-modal").onclick=ctx.closeModal;
+    document.querySelector("#scan-github").onclick=async()=>{try{await scan();ctx.toast("Repository scanned","success")}catch(e){ctx.toast("Scan failed: "+e.message)}};
+    form.onsubmit=async e=>{
+      e.preventDefault();if(!entries.length)await scan();
+      const selected=[...form.querySelectorAll('input[name="path"]:checked')].map(x=>x.value);if(!selected.length)throw new Error("Select at least one file.");
+      const full=select.value,br=branch.value.trim()||"main";const [owner,name]=full.split("/");
+      const existing=await ctx.supabase.from("site_files").select("id,path,content,is_protected").eq("site_id",site.id);if(existing.error)throw existing.error;
+      const byPath=new Map((existing.data||[]).map(x=>[x.path,x]));let imported=0,skipped=0;
+      for(const path of selected){
+        const entry=entries.find(x=>x.path===path);if(!entry)continue;const current=byPath.get(path);
+        if(current?.is_protected&&mode.value==="merge"){skipped++;continue}
+        const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs/"+entry.sha);if(blob.encoding!=="base64")continue;
+        const content=decodeBase64(blob.content),payload={content,mime_type:mime(path),is_protected:path==="index.html",updated_at:new Date().toISOString()};
+        const q=current?ctx.supabase.from("site_files").update(payload).eq("id",current.id):ctx.supabase.from("site_files").insert({user_id:ctx.state.user.id,site_id:site.id,path,content,mime_type:mime(path),is_protected:path==="index.html"});
+        const res=await q;if(res.error)throw res.error;imported++;
       }
-      const existing=await ctx.supabase.from("site_files").select("id,path").eq("site_id",site.id);
-      if(existing.error)throw existing.error;
-      const byPath=new Map((existing.data||[]).map(x=>[x.path,x.id]));
-      for(let i=0;i<files.length;i++){
-        const f=files[i],id=byPath.get(f.path);
-        const payload={content:f.content,mime_type:f.mime_type,is_protected:f.is_protected,updated_at:new Date().toISOString()};
-        const q=id?ctx.supabase.from("site_files").update(payload).eq("id",id):ctx.supabase.from("site_files").insert(f);
-        const res=await q;if(res.error)throw res.error;
-      }
-      ctx.state.github.repo={full_name:full,branch:br};
-      await ctx.supabase.from("sites").update({updated_at:new Date().toISOString()}).eq("id",site.id);
-      ctx.closeModal();ctx.toast("Imported "+files.length+" text files from "+full,"success");
-      await ctx.reloadSiteFiles();ctx.renderAll();ctx.showView("files");
+      ctx.state.github.repo={full_name:full,branch:br};await ctx.supabase.from("sites").update({updated_at:new Date().toISOString()}).eq("id",site.id);
+      ctx.closeModal();ctx.toast("Imported "+imported+" files"+(skipped?" · "+skipped+" protected files skipped":""),"success");await ctx.reloadSiteFiles();ctx.renderAll();ctx.showView("files");
     };
   }catch(e){ctx.toast("GitHub import failed: "+e.message)}
 }
