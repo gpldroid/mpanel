@@ -1,0 +1,51 @@
+name: mPanel quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find assets/js -type f -name '*.js' -print)
+          test -n "$files"
+          while IFS= read -r file; do
+            echo "Checking $file"
+            node --check "$file"
+          done <<< "$files"
+
+      - name: Check required entry files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f assets/css/style.css
+          test -f assets/js/config.js
+          grep -q 'assets/js/app.js' index.html
+          grep -q 'assets/js/platform.js' index.html
+
+      - name: Check migration order
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in 001 002 003 004 005 006 007 008 009 010 011 012; do
+            test -f "supabase/migrations/${n}_"*.sql
+          done
