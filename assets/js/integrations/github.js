@@ -125,16 +125,29 @@ async function publishGeneratedSite(files,message="mPanel: publish website"){
   const ref=await githubRequest("/repos/"+owner+"/"+name+"/git/ref/heads/"+encodeURIComponent(repo.branch));
   const parent=ref.object.sha;
   const commit=await githubRequest("/repos/"+owner+"/"+name+"/git/commits/"+parent);
+  const generated=files.filter(f=>isTextPath(f.path));
+  const manifestPath=".mpanel-manifest.json";
+  const previous=[];
+  try{
+    const old=await githubRequest("/repos/"+owner+"/"+name+"/contents/"+manifestPath+"?ref="+encodeURIComponent(repo.branch));
+    const raw=decodeBase64(old.content);
+    const parsed=JSON.parse(raw);
+    if(Array.isArray(parsed.paths))previous.push(...parsed.paths.filter(Boolean));
+  }catch{}
+  const currentPaths=generated.map(f=>f.path).filter(Boolean);
+  const manifest={version:1,managed_by:"mPanel",generated_at:new Date().toISOString(),paths:currentPaths};
+  generated.push({path:manifestPath,content:JSON.stringify(manifest,null,2),mime_type:"application/json"});
   const entries=[];
-  for(const f of files){
-    if(!isTextPath(f.path))continue;
+  for(const f of generated){
     const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:encodeBase64(f.content),encoding:"base64"})});
     entries.push({path:f.path,mode:"100644",type:"blob",sha:blob.sha});
   }
+  const stale=previous.filter(p=>!currentPaths.includes(p)&&p!==manifestPath);
+  for(const p of stale)entries.push({path:p,mode:"100644",type:"blob",sha:null});
   const tree=await githubRequest("/repos/"+owner+"/"+name+"/git/trees",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({base_tree:commit.tree.sha,tree:entries})});
   const created=await githubRequest("/repos/"+owner+"/"+name+"/git/commits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,tree:tree.sha,parents:[parent]})});
   await githubRequest("/repos/"+owner+"/"+name+"/git/refs/heads/"+encodeURIComponent(repo.branch),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({sha:created.sha,force:false})});
-  return {sha:created.sha,files:entries.length,repository:repo.full_name,branch:repo.branch};
+  return {sha:created.sha,files:generated.length,deleted:stale.length,repository:repo.full_name,branch:repo.branch};
 }
 function renderGitHub(state){
   const el=document.querySelector("#view-github");if(!el)return;
