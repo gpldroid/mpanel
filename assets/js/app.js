@@ -707,7 +707,7 @@ if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("da
 let signUp=false;
 $("#connection-test")?.addEventListener("click",testSupabaseConnection);
 each(".nav-item[data-view]",b=>b.onclick=()=>showView(b.dataset.view));
-$("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Create your premium mPanel account with full dashboard access.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
+$("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Create your premium mPanel account with full dashboard access.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create an account"};
 $("#auth-form").onsubmit=async e=>{
  e.preventDefault();
  const btn=$("#auth-submit"),email=$("#auth-email").value.trim(),password=$("#auth-password").value;
