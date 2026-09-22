@@ -350,7 +350,7 @@ function bindEditor(item,isPage){
   title.oninput=()=>{if(!item&&!slug.dataset.manual)slug.value=slugify(title.value);preview()};
   slug.oninput=()=>slug.dataset.manual="1";
   content.oninput=preview;metaTitle.oninput=preview;metaDesc.oninput=preview;$("#cms-refresh-preview").onclick=preview;preview();
-  $("#cancel-modal").onclick=closeModal;$("#close-modal").onclick=closeModal;
+  $("#cancel-modal").onclick=closeModal;$("#close-modal").onclick=closeModal;$("#revision-history")?.addEventListener("click",()=>openRevisionHistory(isPage?"page":"post",item));
   form.onsubmit=async e=>{
     e.preventDefault();const f=new FormData(form),s=cmsSite();
     const payload={user_id:state.user.id,site_id:s.id,title:f.get("title").trim(),slug:slugify(f.get("slug"))||slugify(f.get("title")),content:f.get("content"),status:f.get("status"),meta_title:f.get("meta_title"),meta_description:f.get("meta_description"),canonical_url:f.get("canonical_url"),robots:f.get("robots")};
