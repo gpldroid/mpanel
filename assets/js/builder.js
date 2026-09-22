@@ -125,7 +125,8 @@ export function buildSiteFiles(state){
  const urls=[base+"/",...published.map(p=>base+"/posts/"+slug(p.slug)+".html"),...pages.map(p=>base+"/pages/"+slug(p.slug)+".html")].filter(Boolean);
  if(state.siteSeo?.sitemap_enabled!==false)files.push({path:"sitemap.xml",content:'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls.map(u=>"<url><loc>"+esc(u)+"</loc></url>").join("")+"</urlset>",mime_type:"application/xml"});
  const robots=state.siteSeo?.robots_txt||("User-agent: *\nAllow: /\n"+(base?"\nSitemap: "+base+"/sitemap.xml":""));
- files.push({path:"robots.txt",content:robots,mime_type:"text/plain"});\n files.push({path:".nojekyll",content:"",mime_type:"text/plain"});
+ files.push({path:"robots.txt",content:robots,mime_type:"text/plain"});
+ files.push({path:".nojekyll",content:"",mime_type:"text/plain"});
  const redirects=(state.redirects||[]).filter(x=>x.enabled);
  if(redirects.length)files.push({path:"_redirects",content:redirects.map(x=>x.from_path+" "+x.to_path+" "+x.status_code).join("\n")+"\n",mime_type:"text/plain"});
  return files;
