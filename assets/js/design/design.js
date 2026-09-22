@@ -94,19 +94,19 @@ function renderDesignViews(){
 }
 function bind(){
   const qs=(s)=>document.querySelector(s);
-  const qsa=(s)=>document.querySelectorAll(s);
-  qsa(".layout-up").forEach(b=>b.onclick=()=>moveLayout(b.dataset.id,-1));
-  qsa(".layout-down").forEach(b=>b.onclick=()=>moveLayout(b.dataset.id,1));
-  qsa(".layout-toggle").forEach(b=>b.onclick=()=>toggleLayout(b.dataset.id));
+  const each=(s,fn)=>{const nodes=document.querySelectorAll(s);for(let i=0;i<nodes.length;i++)fn(nodes[i],i,nodes)};
+  each(".layout-up",b=>b.onclick=()=>moveLayout(b.dataset.id,-1));
+  each(".layout-down",b=>b.onclick=()=>moveLayout(b.dataset.id,1));
+  each(".layout-toggle",b=>b.onclick=()=>toggleLayout(b.dataset.id));
   qs("#new-widget")?.addEventListener("click",()=>openWidget());
-  qsa(".edit-widget").forEach(b=>b.onclick=()=>openWidget(ctx.state.design.widgets.find(x=>x.id===b.dataset.id)));
-  qsa(".delete-widget").forEach(b=>b.onclick=()=>deleteWidget(b.dataset.id));
+  each(".edit-widget",b=>b.onclick=()=>openWidget(ctx.state.design.widgets.find(x=>x.id===b.dataset.id)));
+  each(".delete-widget",b=>b.onclick=()=>deleteWidget(b.dataset.id));
   qs("#new-menu")?.addEventListener("click",openMenu);
   qs("#new-menu-item")?.addEventListener("click",()=>openMenuItem());
-  qsa(".edit-menu-item").forEach(b=>b.onclick=()=>openMenuItem(ctx.state.design.menuItems.find(x=>x.id===b.dataset.id)));
-  qsa(".delete-menu-item").forEach(b=>b.onclick=()=>deleteMenuItem(b.dataset.id));
-  qsa(".menu-up").forEach(b=>b.onclick=()=>moveMenu(b.dataset.id,-1));
-  qsa(".menu-down").forEach(b=>b.onclick=()=>moveMenu(b.dataset.id,1));
+  each(".edit-menu-item",b=>b.onclick=()=>openMenuItem(ctx.state.design.menuItems.find(x=>x.id===b.dataset.id)));
+  each(".delete-menu-item",b=>b.onclick=()=>deleteMenuItem(b.dataset.id));
+  each(".menu-up",b=>b.onclick=()=>moveMenu(b.dataset.id,-1));
+  each(".menu-down",b=>b.onclick=()=>moveMenu(b.dataset.id,1));
   qs("#menu-select")?.addEventListener("change",e=>{const selected=ctx.state.design.menus.find(x=>x.id===e.target.value);if(selected){ctx.state.design.menus=[selected,...ctx.state.design.menus.filter(x=>x.id!==selected.id)]}renderDesignViews()});
   qs("#theme-settings-form")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target),payload={primary_color:f.get("primary_color"),accent_color:f.get("accent_color"),background_color:f.get("background_color"),surface_color:f.get("surface_color"),text_color:f.get("text_color"),font_family:f.get("font_family"),container_width:Number(f.get("container_width")),border_radius:Number(f.get("border_radius")),custom_css:f.get("custom_css")};const r=await ctx.supabase.from("theme_settings").upsert({...payload,user_id:ctx.state.user.id,site_id:ctx.state.selectedSite.id},{onConflict:"site_id"}).select().single();if(r.error){ctx.toast(r.error.message);return}ctx.state.design.theme=r.data;ctx.closeModal();renderDesignViews();ctx.toast("Theme settings saved","success")});
 }
