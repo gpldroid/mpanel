@@ -189,6 +189,7 @@ async function health(){
  await run("domain_verification",async()=>{const r=await db.from("domains").select("id",{count:"exact",head:true}).eq("site_id",site.id);if(r.error)throw r.error});
  await run("github_integration",async()=>{const r=await db.from("site_integrations").select("id").eq("site_id",site.id).eq("provider","github").maybeSingle();if(r.error||!r.data)throw Error("GitHub integration missing")});
  await run("analytics",async()=>{const r=await db.from("site_analytics_settings").select("id").eq("site_id",site.id).maybeSingle();if(r.error)throw r.error;if(!r.data)throw Error("Analytics migration/settings missing")});
+ await run("deployment_verification",async()=>{const r=await db.from("deployments").select("verification_status").eq("site_id",site.id).order("created_at",{ascending:false}).limit(1);if(r.error)throw r.error;if(!r.data?.[0])throw Error("No deployment has been verified yet");if(r.data[0].verification_status!=="verified")throw Error("Latest deployment is not verified")});
  await run("build_output",async()=>{if(!settings.seo?.site_title)throw Error("Site SEO title missing")});
  for(const [check_key,status,message] of rows)await db.from("system_checks").upsert({user_id:user.id,site_id:site.id,check_key,status,message,last_checked_at:new Date().toISOString()},{onConflict:"site_id,check_key"});
  toast("Full production preflight completed",true);render();
