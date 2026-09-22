@@ -2,7 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 let renderGitHub=()=>{},initGitHub=()=>{},openGitHubImport=()=>{},pushSiteToGitHub=()=>{},publishGeneratedSite=async()=>{throw new Error("GitHub module is not ready.")},loadGitHubIntegration=async()=>{};
 let renderDesign=()=>{},initDesign=()=>{};
-let buildSiteFiles=()=>({}),buildPreview=()=>{};
+let buildSiteFiles=()=>({}),buildPreview=()=>{},validateBuild=()=>({ok:true,errors:[],warnings:[]});
 let renderAnalytics=()=>{},initAnalytics=()=>{};
 let renderBuilder=()=>{},initBuilder=()=>{};
 
@@ -16,7 +16,7 @@ async function loadFeatureModules(){
   ]);
   ({renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration}=github);
   ({renderDesign,initDesign}=design);
-  ({buildSiteFiles,buildPreview}=builder);
+  ({buildSiteFiles,buildPreview,validateBuild}=builder);
   ({renderAnalytics,initAnalytics}=analytics);
   ({renderBuilder,initBuilder}=builderUi);
 }
@@ -511,6 +511,8 @@ function buildHash(files){
 async function publishCurrentSite(){
  const s=cmsSite();if(!s){toast("Select a website first.");return}
  try{
+  const preflight=validateBuild(state);
+  if(!preflight.ok){showView("publishing");toast("Build blocked: "+preflight.errors[0]);return}
   showView("publishing");
   const filesNow=buildSiteFiles(state),hash=buildHash(filesNow),r=await publishGeneratedSite(filesNow,"mPanel: publish "+s.name);
   await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:r.repository,branch:r.branch,commit_sha:r.sha,status:r.verified?"success":"failed",files_count:r.files,message:r.verified?"Published and verified":"Published but verification failed",build_hash:hash,verified:!!r.verified,verification_status:r.verified?"verified":"failed",verification_message:r.verification_message||"",verified_at:r.verified?new Date().toISOString():null,deleted_files:r.deleted||0,manifest_sha:r.manifest_sha||null,previous_commit_sha:r.previous_commit_sha||null});
