@@ -674,6 +674,7 @@ async function initializeFeatureModules(){
   initDesign({supabase,state,showView,toast,renderAll,icons});
   initAnalytics({supabase,state,showView,toast,renderAll,icons});
   initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()});
+  renderAll();
  }catch(error){
   console.error("[mPanel feature boot]",error);
   toast("Some dashboard modules could not load. Core account access remains available.","error");
