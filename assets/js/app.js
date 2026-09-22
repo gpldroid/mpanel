@@ -1,11 +1,10 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
-import { renderGitHub, initGitHub, openGitHubImport, pushSiteToGitHub } from "./integrations/github.js";
+import { renderGitHub, initGitHub, openGitHubImport, pushSiteToGitHub, publishGeneratedSite, loadGitHubIntegration } from "./integrations/github.js";
 import { renderDesign, initDesign } from "./design/design.js";
 import { buildSiteFiles, buildPreview } from "./builder.js";
 import { renderAnalytics, initAnalytics } from "./analytics.js";
 import { renderBuilder, initBuilder } from "./builder-ui.js";
-import { publishGeneratedSite, loadGitHubIntegration } from "./integrations/github.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
@@ -479,7 +478,7 @@ $("#auth-form").onsubmit=async e=>{
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
-initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:async()=>{showView("publishing");renderPublishing()}});
+initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()});
 initDesign({supabase,state,showView,toast,renderAll,icons});
 initAnalytics({supabase,state,showView,toast,renderAll,icons});
 initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()});
