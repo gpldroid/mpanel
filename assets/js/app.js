@@ -409,11 +409,31 @@ async function saveSiteSeo(payload){
  if(r.error){toast(authError(r.error));return}
  state.siteSeo=r.data;toast("Site SEO settings saved","success");renderSeo();
 }
+function buildHash(files){
+ let h=2166136261;
+ for(const f of files){const s=f.path+"\\0"+f.content;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}}
+ return ("00000000"+(h>>>0).toString(16)).slice(-8);
+}
+async function publishCurrentSite(){
+ const s=cmsSite();if(!s){toast("Select a website first.");return}
+ try{
+  showView("publishing");
+  const filesNow=buildSiteFiles(state),hash=buildHash(filesNow),r=await publishGeneratedSite(filesNow,"mPanel: publish "+s.name);
+  await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:r.repository,branch:r.branch,commit_sha:r.sha,status:r.verified?"success":"failed",files_count:r.files,message:r.verified?"Published and verified":"Published but verification failed",build_hash:hash,verified:!!r.verified,verification_status:r.verified?"verified":"failed",verification_message:r.verification_message||"",verified_at:r.verified?new Date().toISOString():null,deleted_files:r.deleted||0,manifest_sha:r.manifest_sha||null,previous_commit_sha:r.previous_commit_sha||null});
+  toast(r.verified?"Published and verified successfully":"Published, but production verification failed",r.verified?"success":"error");
+  await loadData();showView("publishing");
+ }catch(e){
+  await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:state.github.repo?.full_name||null,branch:state.github.repo?.branch||null,status:"failed",files_count:0,message:String(e.message||e),build_hash:buildHash(buildSiteFiles(state)),verification_status:"failed",verification_message:String(e.message||e)});
+  toast("Publish failed: "+e.message);
+ }
+}
+window.__mPanelPublish=publishCurrentSite;
+
 function renderPublishing(){
  const s=cmsSite(),files=s?buildSiteFiles(state):[],preview=files.find(x=>x.path==="index.html")?.content||"",deployments=state.deployments||[];
  $("#view-publishing").innerHTML='<div class="toolbar"><div><h3>Publishing</h3><p class="muted">Build the website from CMS content, design and SEO, then publish it to the selected GitHub repository.</p></div><button class="btn primary" id="build-publish"><i data-lucide="rocket"></i>Publish website</button></div>'+
  (s?'<div class="grid two-col"><section class="card"><div class="section-head"><h3>Build output</h3><span class="badge success">'+files.length+' files</span></div><div class="site-list">'+files.slice(0,12).map(f=>'<div class="site-row"><span>'+esc(f.path)+'</span><small class="muted">'+f.mime_type+'</small></div>').join("")+(files.length>12?'<div class="tiny muted">+'+(files.length-12)+' more files</div>':"")+'</div></section><section class="card"><div class="section-head"><h3>Generated preview</h3><button class="btn secondary" id="refresh-build-preview">Refresh</button></div><iframe id="build-preview" class="preview-frame" style="min-height:480px" sandbox="allow-scripts"></iframe></section></div><section class="card" style="margin-top:18px"><h3>Deployment history</h3><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Repository</th><th>Branch</th><th>Files</th><th>Commit</th><th>Date</th></tr></thead><tbody>'+ (deployments.length?deployments.map(d=>'<tr><td><span class="badge '+(d.status==="success"?"success":d.status==="failed"?"warning":"neutral")+'">'+esc(d.status)+'</span></td><td>'+esc(d.repository||"—")+'</td><td>'+esc(d.branch||"—")+'</td><td>'+d.files_count+'</td><td><code>'+esc((d.commit_sha||"").slice(0,8))+'</code></td><td>'+dt(d.created_at)+'</td></tr>').join(""):'<tr><td colspan="6" class="empty">No deployments yet.</td></tr>')+'</tbody></table></div></section>':'<div class="card empty">Select a website first.</div>');
- $("#build-publish")?.addEventListener("click",async()=>{if(!s)return;try{const filesNow=buildSiteFiles(state);const r=await publishGeneratedSite(filesNow,"mPanel: publish "+s.name);await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:r.repository,branch:r.branch,commit_sha:r.sha,status:"success",files_count:r.files,message:"Published website"});toast("Published "+r.files+" files in one commit","success");await loadData();showView("publishing")}catch(e){await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:state.github.repo?.full_name||null,branch:state.github.repo?.branch||null,status:"failed",files_count:0,message:String(e.message||e)});toast("Publish failed: "+e.message)}});
+ $("#build-publish")?.addEventListener("click",publishCurrentSite);
  $("#refresh-build-preview")?.addEventListener("click",()=>{const f=$("#build-preview");if(f)f.srcdoc=buildPreview(state)});
  const f=$("#build-preview");if(f)f.srcdoc=preview;
 }
@@ -462,7 +482,7 @@ $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").cla
 initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:async()=>{showView("publishing");renderPublishing()}});
 initDesign({supabase,state,showView,toast,renderAll,icons});
 initAnalytics({supabase,state,showView,toast,renderAll,icons});
-initBuilder({supabase,state,showView,toast,renderAll,icons});
+initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()});
 
 async function handleAuth(){
  try{
