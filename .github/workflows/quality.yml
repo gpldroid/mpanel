@@ -39,8 +39,9 @@ jobs:
           test -f index.html
           test -f assets/css/style.css
           test -f assets/js/config.js
-          grep -q 'assets/js/app.js' index.html
-          grep -q 'assets/js/platform.js' index.html
+          grep -q 'assets/js/boot.js' index.html
+          grep -q 'import("./app.js?v=' assets/js/boot.js
+          grep -q 'assets/js/platform.js' assets/js/boot.js
 
       - name: Check migration order
         shell: bash
