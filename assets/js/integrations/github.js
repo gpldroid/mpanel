@@ -147,7 +147,24 @@ async function publishGeneratedSite(files,message="mPanel: publish website"){
   const tree=await githubRequest("/repos/"+owner+"/"+name+"/git/trees",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({base_tree:commit.tree.sha,tree:entries})});
   const created=await githubRequest("/repos/"+owner+"/"+name+"/git/commits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,tree:tree.sha,parents:[parent]})});
   await githubRequest("/repos/"+owner+"/"+name+"/git/refs/heads/"+encodeURIComponent(repo.branch),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({sha:created.sha,force:false})});
-  return {sha:created.sha,files:generated.length,deleted:stale.length,repository:repo.full_name,branch:repo.branch};
+  const verified=await verifyPublishedSite(repo,created.sha,currentPaths);
+  return {sha:created.sha,files:generated.length,deleted:stale.length,repository:repo.full_name,branch:repo.branch,verified:verified.ok,verification_message:verified.message,manifest_sha:verified.manifest_sha||null,previous_commit_sha:parent};
+}
+async function verifyPublishedSite(repo,expectedCommit,expectedPaths){
+  const [owner,name]=repo.full_name.split("/");
+  try{
+    const ref=await githubRequest("/repos/"+owner+"/"+name+"/git/ref/heads/"+encodeURIComponent(repo.branch));
+    if(ref.object?.sha!==expectedCommit)return {ok:false,message:"Branch ref did not reach the published commit."};
+    const manifestBlob=await githubRequest("/repos/"+owner+"/"+name+"/contents/.mpanel-manifest.json?ref="+encodeURIComponent(repo.branch));
+    const manifest=JSON.parse(decodeBase64(manifestBlob.content));
+    const paths=Array.isArray(manifest.paths)?manifest.paths:[];
+    const missing=expectedPaths.filter(p=>!paths.includes(p));
+    if(missing.length)return {ok:false,message:"Published manifest is missing "+missing.length+" generated path(s).",manifest_sha:manifestBlob.sha};
+    const index=await githubRequest("/repos/"+owner+"/"+name+"/contents/index.html?ref="+encodeURIComponent(repo.branch));
+    if(!index.sha)return {ok:false,message:"Published index.html could not be verified.",manifest_sha:manifestBlob.sha};
+    return {ok:true,message:"GitHub branch, manifest and index.html verified.",manifest_sha:manifestBlob.sha};
+  }catch(e){return {ok:false,message:"Repository verification failed: "+String(e.message||e)}}
+}
 }
 function renderGitHub(state){
   const el=document.querySelector("#view-github");if(!el)return;
@@ -173,4 +190,4 @@ function initGitHub(c){
   ctx.supabase.auth.getSession().then(async({data})=>{await syncSession(data.session);await loadGitHubIntegration();renderGitHub(ctx.state)}).catch(()=>{});
   ctx.supabase.auth.onAuthStateChange((_event,session)=>setTimeout(()=>syncSession(session),0));
 }
-export {renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration};
+export {renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration,verifyPublishedSite};
