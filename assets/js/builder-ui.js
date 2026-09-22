@@ -16,6 +16,7 @@ const blockTypes=[
  ["menu","Menu","Site navigation"],
  ["image","Image","Image with alt text and link"],
  ["cta","CTA","Call-to-action panel"],
+ ["content","Content","Current post or page content"],
  ["custom","Custom","Custom block configuration"]
 ];
 
@@ -105,6 +106,7 @@ async function deleteTemplate(id){
 }
 
 function defaultContent(type){
+ if(type==="content")return {title:"Content"};
  if(type==="hero")return {title:"Your headline",text:"Build a beautiful section for your website.",button_text:"Learn more",button_url:"#"};
  if(type==="text")return {text:"Write your content here."};
  if(type==="html")return {html:"<section><h2>Custom HTML</h2><p>Edit this block from mPanel.</p></section>"};
