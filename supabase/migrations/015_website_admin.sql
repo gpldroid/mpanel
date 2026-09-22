@@ -127,7 +127,7 @@ create or replace function public.clear_site_build_cache(p_site_id uuid)
 returns void language plpgsql security definer set search_path=public as $$
 begin
  if not is_site_member(p_site_id,array['owner','admin']) then raise exception 'Not authorized'; end if;
- update public.site_admin_settings set cache_version=encode(gen_random_bytes(8),'hex'),build_cache_cleared_at=now(),updated_at=now() where site_id=p_site_id;
+ update public.site_admin_settings set cache_version=md5(clock_timestamp()::text||random()::text),build_cache_cleared_at=now(),updated_at=now() where site_id=p_site_id;
  insert into public.audit_logs(user_id,action,entity_type,entity_id,details)
  values(auth.uid(),'site.cache_cleared','site',p_site_id,jsonb_build_object('cache_version',(select cache_version from public.site_admin_settings where site_id=p_site_id)));
 end $$;
@@ -160,3 +160,25 @@ grant execute on function public.restore_site_backup(uuid) to authenticated;
 grant execute on function public.clear_site_build_cache(uuid) to authenticated;
 grant execute on function public.manage_site_member(uuid,uuid,text) to authenticated;
 grant execute on function public.remove_site_member(uuid,uuid) to authenticated;
+
+
+create or replace function public.update_site_general_settings(p_site_id uuid,p_name text,p_url text,p_description text,p_status text)
+returns void language plpgsql security definer set search_path=public as $$
+begin
+ if not is_site_member(p_site_id,array['owner','admin']) then raise exception 'Not authorized'; end if;
+ if nullif(trim(p_name),'') is null then raise exception 'Website name is required'; end if;
+ if p_status not in ('active','paused') then raise exception 'Invalid site status'; end if;
+ update public.sites set name=trim(p_name),url=trim(p_url),description=coalesce(p_description,''),status=p_status,updated_at=now() where id=p_site_id;
+ insert into public.audit_logs(user_id,action,entity_type,entity_id,details)
+ values(auth.uid(),'site.settings_updated','site',p_site_id,jsonb_build_object('name',trim(p_name),'url',trim(p_url),'status',p_status));
+end $$;
+
+revoke all on function public.update_site_general_settings(uuid,text,text,text,text) from public;
+grant execute on function public.update_site_general_settings(uuid,text,text,text,text) to authenticated;
+
+drop policy if exists "audit site members read" on public.audit_logs;
+create policy "audit site members read" on public.audit_logs for select
+using (
+ auth.uid()=user_id
+ or (entity_type='site' and entity_id is not null and public.is_site_member(entity_id))
+);
