@@ -107,7 +107,10 @@ end $$;
 
 create or replace function public.restore_site_backup(p_backup_id uuid)
 returns integer language plpgsql security definer set search_path=public as $$
-declare b record,item jsonb,n integer:=0;
+declare
+  b record;
+  item jsonb;
+  n integer := 0;
 begin
  select * into b from public.site_backups where id=p_backup_id;
  if not found or not is_site_member(b.site_id,array['owner','admin']) then raise exception 'Backup not found or not authorized'; end if;
