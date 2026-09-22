@@ -29,3 +29,36 @@
 @media(max-width:1100px){.pipeline-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:700px){.pipeline-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+/* Final responsive shell */
+@media(max-width:900px){
+ .sidebar{width:230px}
+ .topbar{gap:10px}
+ .topbar-context h2{font-size:18px}
+ .site-switcher{min-width:150px}.site-switcher select{min-width:150px;max-width:190px}
+ .workspace-grid{grid-template-columns:1fr}
+ .preview-card{grid-column:auto}
+}
+@media(max-width:600px){
+ .topbar{min-height:64px;padding:12px}
+ .topbar-context{display:grid;gap:2px;flex:1}
+ .topbar-context .eyebrow{display:none}
+ .topbar-context h2{font-size:16px;margin:0}
+ .site-switcher{min-width:110px;font-size:9px}
+ .site-switcher select{min-width:110px;max-width:135px;font-size:12px;padding:7px 24px 7px 7px}
+ .content{padding:14px}
+ .card{padding:14px}
+ .toolbar,.workspace-head{gap:12px}
+ .workspace-actions,.editor-actions,.toolbar .btn{width:100%}
+ .workspace-actions .btn,.editor-actions .btn{flex:1}
+ .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .table{min-width:680px}
+ .modal{width:calc(100vw - 20px);max-height:94vh}
+ .modal-actions{flex-direction:column}
+ .modal-actions .btn{width:100%}
+ .account-menu{right:-5px;width:min(250px,calc(100vw - 20px))}
+ .pipeline-grid{grid-template-columns:1fr 1fr}
+ .pipeline-step{padding:11px}
+ .pipeline-step .badge{font-size:9px}
+ .manager-cards{grid-template-columns:1fr}
+ .preview-frame{min-height:360px}
+}
