@@ -210,7 +210,7 @@ async function openWebsiteAdmin(site){
  const root=$("#modal-root"); if(!root||!site)return;
  root.innerHTML='<div class="modal-backdrop"><div class="modal admin-modal"><div class="modal-head"><div><span class="eyebrow">WEBSITE ADMINISTRATION</span><h3>'+esc(site.name)+'</h3><p class="muted">General settings, members, backups, maintenance, import/export and advanced deployment controls.</p></div><button class="icon-btn" id="admin-close"><i data-lucide="x"></i></button></div><div class="workspace-tabs" style="margin-bottom:18px"><button class="btn active" data-admin-tab="general">General</button><button class="btn secondary" data-admin-tab="members">Users / Roles</button><button class="btn secondary" data-admin-tab="backups">Backups</button><button class="btn secondary" data-admin-tab="activity">Activity Log</button><button class="btn secondary" data-admin-tab="maintenance">Maintenance</button><button class="btn secondary" data-admin-tab="health">Site Health</button><button class="btn secondary" data-admin-tab="advanced">Advanced</button></div><div id="admin-panel"></div></div></div>';
  icons();
- $("#admin-close").onclick=closeModal;
+ $("#admin-close").onclick=closeModal; $("#admin-cancel")?.addEventListener("click",closeModal);
  each("[data-admin-tab]",b=>b.onclick=()=>renderWebsiteAdminTab(site,b.dataset.adminTab));
  await renderWebsiteAdminTab(site,"general");
 }
