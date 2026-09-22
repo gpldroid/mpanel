@@ -25,10 +25,9 @@ async function setSelectedSite(id){
  state.selectedFile=null;
  state.design={layout:[],widgets:[],menus:[],menuItems:[],theme:null,loadedSiteId:null};
  state.activeThemePresetId=null;
- await loadSiteFiles();
- await loadCms();
- await loadGitHubIntegration();
- renderAll();
+ // Reload every site-scoped module together so switching sites can never leave stale CMS,
+ // SEO, analytics, builder, redirects, deployments or GitHub data on screen.
+ await loadData();
  showView(state.view||"dashboard");
 }
 const each=(selector,callback)=>{
@@ -147,15 +146,17 @@ async function ensureWorkspaceFiles(site){
  if(!state.selectedFile||!state.files.some(x=>x.id===state.selectedFile.id))state.selectedFile=state.files.find(x=>x.path==="index.html")||state.files[0]||null;
  renderFiles();renderTheme();updatePreview();
 }
-function openWebsiteManager(id){
- state.selectedSite=state.sites.find(s=>s.id===id)||state.sites[0]||null;
- if(!state.selectedSite){toast("Add a website first.");return}
+async function openWebsiteManager(id){
+ const next=state.sites.find(s=>s.id===id)||null;
+ if(!next){toast("Select a website first.");return}
+ await setSelectedSite(next.id);
  showView("manager");
- ensureWorkspaceFiles(state.selectedSite);
+ await ensureWorkspaceFiles(state.selectedSite);
 }
-function managerTab(view){
+async function managerTab(view){
  if(!state.selectedSite){toast("Select a website first.");showView("sites");return}
- showView(view);ensureWorkspaceFiles(state.selectedSite);
+ showView(view);
+ await ensureWorkspaceFiles(state.selectedSite);
 }
 function renderManager(){
  const s=state.selectedSite;
