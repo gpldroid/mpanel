@@ -2,7 +2,8 @@ const esc=v=>String(v??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const slug=v=>String(v||"").trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\u0600-\u06ff]+/g,"-").replace(/^-+|-+$/g,"").slice(0,100)||"page";
 
 function theme(state){
- const t=state.design?.theme||{};
+ const preset=(state.themePresets||[]).find(x=>x.id===state.activeThemePresetId)?.settings||{};
+ const t={...(state.design?.theme||{}),...preset};
  return {primary:t.primary_color||"#4f46e5",accent:t.accent_color||"#7c3aed",bg:t.background_color||"#f6f8fc",surface:t.surface_color||"#fff",text:t.text_color||"#111827",font:t.font_family||"system-ui",width:Number(t.container_width)||1200,radius:Number(t.border_radius)||16,custom:t.custom_css||""};
 }
 function depth(path){return String(path||"").split("/").filter(Boolean).length>1?1:0}
@@ -67,9 +68,10 @@ function canonicalFor(state,path){
  if(!base)return "";
  return base+(path==="index.html"?"/":"/"+path);
 }
-function shell(state,title,description,content,current){
- const t=theme(state),seo=state.siteSeo||{},canonical=canonicalFor(state,current),robots=(seo.robots_index===false?"noindex":"index")+", "+(seo.robots_follow===false?"nofollow":"follow");
- const schema=seo.schema_json&&Object.keys(seo.schema_json).length?JSON.stringify(seo.schema_json):JSON.stringify({"@context":"https://schema.org","@type":seo.schema_type||"WebSite","name":seo.site_title||state.selectedSite?.name||"Website","url":canonical||state.selectedSite?.url||""});
+function shell(state,title,description,content,current,options={}){
+ const t=theme(state),seo=state.siteSeo||{},canonical=canonicalFor(state,current),robots=options.robots||((seo.robots_index===false?"noindex":"index")+", "+(seo.robots_follow===false?"nofollow":"follow"));
+ const schemaObject=options.schema||((seo.schema_json&&Object.keys(seo.schema_json).length)?seo.schema_json:{"@context":"https://schema.org","@type":seo.schema_type||"WebSite","name":seo.site_title||state.selectedSite?.name||"Website","url":canonical||state.selectedSite?.url||""});
+ const schema=JSON.stringify(schemaObject);
  const cssHref=href("style.css",current);
  return '<!doctype html><html lang="'+esc(state.siteSeo?.language||"en")+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><meta name="description" content="'+esc(description)+'"><meta name="robots" content="'+robots+'">'+(canonical?'<link rel="canonical" href="'+esc(canonical)+'">':"")+(seo.og_image?'<meta property="og:image" content="'+esc(seo.og_image)+'">':"")+'<meta property="og:title" content="'+esc(seo.og_title||title)+'"><meta property="og:description" content="'+esc(seo.og_description||description)+'"><meta name="twitter:card" content="'+esc(seo.twitter_card||"summary_large_image")+'"><meta name="twitter:title" content="'+esc(seo.twitter_title||title)+'"><meta name="twitter:description" content="'+esc(seo.twitter_description||description)+'">'+(seo.twitter_image?'<meta name="twitter:image" content="'+esc(seo.twitter_image)+'">':"")+'<script type="application/ld+json">'+schema.replace(/<\/script/gi,"<\\/script")+'</script>'+(seo.custom_head||"")+'<link rel="stylesheet" href="'+esc(cssHref)+'"></head><body><header class="site-header"><div class="container"><a class="brand" href="'+esc(href("index.html",current))+'">'+esc(state.selectedSite?.name||"Website")+'</a><nav>'+navHtml(state,current)+'</nav></div></header><div class="container page-grid"><main class="content">'+content+'</main><aside>'+region(state,"sidebar",current)+'</aside></div><footer class="site-footer"><div class="container">'+region(state,"footer",current)+'<small>© '+new Date().getFullYear()+" "+esc(state.selectedSite?.name||"Website")+'</small></div></footer>'+analyticsTracker(state)+'</body></html>';
 }
@@ -78,12 +80,25 @@ function renderTemplateContent(state,type,fallback,current,context={}){
  return generated||fallback;
 }
 function postContent(p,state,current){
- const fallback="<article><header><h1>"+esc(p.title)+"</h1>"+(p.published_at?"<small>"+esc(new Date(p.published_at).toLocaleDateString())+"</small>":"")+"</header><div>"+p.content+"</div></article>";
- return renderTemplateContent(state,"post",fallback,current,{content:fallback});
+ const fallback="<article><header><h1>"+esc(p.title)+"</h1>"+(p.published_at?"<small>"+esc(new Date(p.published_at).toLocaleDateString())+"</small>":"")+(p.featured_image?"<img src=\""+esc(p.featured_image)+"\" alt=\""+esc(p.title)+"\" loading=\"eager\">":"")+"</header><div>"+p.content+"</div></article>";
+ const schema={"@context":"https://schema.org","@type":p.schema_type||"BlogPosting","headline":p.title,"description":p.meta_description||p.excerpt||"","datePublished":p.published_at||undefined,"dateModified":p.updated_at||undefined,"mainEntityOfPage":canonicalFor(state,current)||undefined,"image":p.featured_image?[p.featured_image]:undefined};
+ Object.keys(schema).forEach(k=>schema[k]===undefined&&delete schema[k]);
+ return {content:renderTemplateContent(state,"post",fallback,current,{content:fallback}),schema};
 }
 function pageContent(p,state,current){
  const fallback="<article><h1>"+esc(p.title)+"</h1><div>"+p.content+"</div></article>";
- return renderTemplateContent(state,"page",fallback,current,{content:fallback});
+ const schema={"@context":"https://schema.org","@type":"WebPage","name":p.title,"description":p.meta_description||"","url":canonicalFor(state,current)||undefined,"dateModified":p.updated_at||undefined};
+ Object.keys(schema).forEach(k=>schema[k]===undefined&&delete schema[k]);
+ return {content:renderTemplateContent(state,"page",fallback,current,{content:fallback}),schema};
+}
+function archiveContent(state,current){
+ const posts=(state.posts||[]).filter(p=>p.status==="published");
+ const fallback="<section><h1>Archive</h1><div class=\"post-list\">"+posts.map(p=>"<article class=\"post-card\"><h2><a href=\""+esc(href("posts/"+slug(p.slug)+".html",current))+"\">"+esc(p.title)+"</a></h2><p>"+esc(p.excerpt||p.meta_description||"")+"</p></article>").join("")+"</div></section>";
+ return {content:renderTemplateContent(state,"archive",fallback,current,{content:fallback}),schema:{"@context":"https://schema.org","@type":"CollectionPage","name":"Archive","url":canonicalFor(state,current)||undefined}};
+}
+function notFoundContent(state,current){
+ const fallback="<section><h1>Page not found</h1><p>The page you requested could not be found.</p><a class=\"btn\" href=\""+esc(href("index.html",current))+"\">Back to home</a></section>";
+ return {content:renderTemplateContent(state,"404",fallback,current,{content:fallback}),schema:{"@context":"https://schema.org","@type":"WebPage","name":"Page not found"}};
 }
 
 export function buildSiteFiles(state){
@@ -94,17 +109,23 @@ export function buildSiteFiles(state){
  files.push({path:"style.css",content:baseCss(theme(state)),mime_type:"text/css"});
  for(const p of published){
   const current="posts/"+slug(p.slug)+".html";
-  files.push({path:current,content:shell(state,p.meta_title||p.title,p.meta_description||p.excerpt||"",postContent(p,state,current),current),mime_type:"text/html"});
+  const built=postContent(p,state,current);
+  files.push({path:current,content:shell(state,p.meta_title||p.title,p.meta_description||p.excerpt||"",built.content,current,{schema:built.schema}),mime_type:"text/html"});
  }
  for(const p of pages){
   const current="pages/"+slug(p.slug)+".html";
-  files.push({path:current,content:shell(state,p.meta_title||p.title,p.meta_description||"",pageContent(p),current),mime_type:"text/html"});
+  const built=pageContent(p,state,current);
+  files.push({path:current,content:shell(state,p.meta_title||p.title,p.meta_description||"",built.content,current,{schema:built.schema}),mime_type:"text/html"});
  }
+ const archive=archiveContent(state,"archive.html");
+ files.push({path:"archive.html",content:shell(state,"Archive","Browse published content.",archive.content,"archive.html",{schema:archive.schema}),mime_type:"text/html"});
+ const notFound=notFoundContent(state,"404.html");
+ files.push({path:"404.html",content:shell(state,"Page not found","The requested page could not be found.",notFound.content,"404.html",{schema:notFound.schema,robots:"noindex, nofollow"}),mime_type:"text/html"});
  const base=(state.siteSeo?.canonical_base||state.selectedSite?.url||"").replace(/\/$/,"");
  const urls=[base+"/",...published.map(p=>base+"/posts/"+slug(p.slug)+".html"),...pages.map(p=>base+"/pages/"+slug(p.slug)+".html")].filter(Boolean);
  if(state.siteSeo?.sitemap_enabled!==false)files.push({path:"sitemap.xml",content:'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls.map(u=>"<url><loc>"+esc(u)+"</loc></url>").join("")+"</urlset>",mime_type:"application/xml"});
  const robots=state.siteSeo?.robots_txt||("User-agent: *\nAllow: /\n"+(base?"\nSitemap: "+base+"/sitemap.xml":""));
- files.push({path:"robots.txt",content:robots,mime_type:"text/plain"});
+ files.push({path:"robots.txt",content:robots,mime_type:"text/plain"});\n files.push({path:".nojekyll",content:"",mime_type:"text/plain"});
  const redirects=(state.redirects||[]).filter(x=>x.enabled);
  if(redirects.length)files.push({path:"_redirects",content:redirects.map(x=>x.from_path+" "+x.to_path+" "+x.status_code).join("\n")+"\n",mime_type:"text/plain"});
  return files;
