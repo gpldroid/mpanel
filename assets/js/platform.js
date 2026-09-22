@@ -5,6 +5,12 @@ const db=createClient(SUPABASE_URL.trim().replace(/\/$/,""),SUPABASE_ANON_KEY.tr
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const toast=(m,ok=false)=>{const r=document.querySelector("#toast-root");if(!r)return;const e=document.createElement("div");e.className="toast "+(ok?"toast-success":"");e.textContent=m;r.append(e);setTimeout(()=>e.remove(),4500)};
 let user=null,site=null,settings={};
+function syncGlobalContext(){
+ const globalState=window.__mPanelState;
+ if(globalState?.user)user=globalState.user;
+ if(globalState?.selectedSite)site=globalState.selectedSite;
+ return globalState;
+}
 
 function css(){
  if(document.querySelector("#platform-css"))return;
@@ -14,11 +20,20 @@ function css(){
 }
 async function session(){const r=await db.auth.getSession();user=r.data.session?.user||null;return user}
 async function loadSite(){
+ syncGlobalContext();
  if(!user)return null;
- const r=await db.from("sites").select("*").order("created_at",{ascending:false}).limit(1).maybeSingle();if(r.error)throw r.error;
- site=r.data||null;if(!site)return null;
- const [a,b,c]=await Promise.all([db.from("site_security_settings").select("*").eq("site_id",site.id).maybeSingle(),db.from("site_performance_settings").select("*").eq("site_id",site.id).maybeSingle(),db.from("site_seo_settings").select("*").eq("site_id",site.id).maybeSingle()]);
- settings={security:a.data,performance:b.data,seo:c.data};return site;
+ if(!site){
+  settings={security:null,performance:null,seo:null};
+  return null;
+ }
+ const [a,b,c]=await Promise.all([
+  db.from("site_security_settings").select("*").eq("site_id",site.id).maybeSingle(),
+  db.from("site_performance_settings").select("*").eq("site_id",site.id).maybeSingle(),
+  db.from("site_seo_settings").select("*").eq("site_id",site.id).maybeSingle()
+ ]);
+ if(a.error||b.error||c.error)throw (a.error||b.error||c.error);
+ settings={security:a.data,performance:b.data,seo:c.data};
+ return site;
 }
 function mount(){
  css();if(document.querySelector("#view-platform"))return;
@@ -39,6 +54,7 @@ const card=(i,t,d,b,wide=false)=>'<section class="card platform-card '+(wide?"pl
 
 async function render(){
  const root=document.querySelector("#view-platform");if(!root)return;
+ syncGlobalContext();
  if(!user){root.innerHTML=card("lock","Platform Center","Sign in first.","");return}
  try{await loadSite()}catch(e){root.innerHTML=card("triangle-alert","Schema unavailable","Run the required Supabase migrations first.",'<p class="tiny muted">'+esc(e.message||e)+"</p>");return}
  if(!site){root.innerHTML=card("globe","No website","Create a website first.","");return}
