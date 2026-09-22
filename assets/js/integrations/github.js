@@ -51,43 +51,62 @@ async function openGitHubImport(){
   if(!site){ctx.showView("sites");ctx.toast("Select a website first.");return}
   try{
     const repos=await loadRepos();
-    ctx.openModal('<div class="modal-backdrop"><div class="modal github-modal"><div class="modal-head"><div><h3>Import project from GitHub</h3><p class="muted">Preview files, choose what to import, and protect generated files from accidental overwrite.</p></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><form id="github-import-form"><label>Repository<select name="repo">'+repoOptions(repos,ctx.state.github.repo?.full_name||"")+'</select></label><label style="margin-top:14px">Branch<input name="branch" value="" placeholder="default branch"></label><div class="form-grid" style="margin-top:14px"><label>Search files<input name="search" placeholder="index.html, css, js…"></label><label>Import mode<select name="mode"><option value="merge">Merge — keep existing files</option><option value="replace">Replace selected files</option></select></label></div><div id="github-import-summary" class="github-import-info"><span class="badge neutral">Choose a repository to scan</span></div><div id="github-import-files" class="file-list" style="max-height:260px;margin-top:12px"></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button type="button" class="btn secondary" id="scan-github">Scan repository</button><button class="btn primary">Import selected</button></div></form></div></div>');
+    ctx.openModal('<div class="modal-backdrop"><div class="modal github-modal"><div class="modal-head"><div><h3>GitHub → Import project</h3><p class="muted">Connect GitHub, choose a repository, clone it, then select the files to import.</p></div><button class="icon-btn" id="close-modal"><i data-lucide="x"></i></button></div><div class="github-import-steps"><span class="badge success">GitHub</span><span>→</span><span class="badge neutral">Connect GitHub</span><span>→</span><span class="badge neutral">Repository</span><span>→</span><span class="badge neutral">Import project</span><span>→</span><span class="badge neutral">Scan repository</span><span>→</span><span class="badge neutral">Clone repository</span><span>→</span><span class="badge neutral">Select files</span><span>→</span><span class="badge neutral">Import clone selected</span></div><form id="github-import-form"><label>Repository<select name="repo">'+repoOptions(repos,ctx.state.github.repo?.full_name||"")+'</select></label><label style="margin-top:14px">Branch<input name="branch" value="" placeholder="default branch"></label><div class="form-grid" style="margin-top:14px"><label>Search cloned files<input name="search" placeholder="index.html, css, js…"></label><label>Import mode<select name="mode"><option value="merge">Merge — keep existing files</option><option value="replace">Replace selected files</option></select></label></div><div id="github-import-summary" class="github-import-info"><span class="badge neutral">1. Scan the repository</span></div><div id="github-import-files" class="file-list" style="max-height:260px;margin-top:12px"><div class="empty">No repository cloned yet.</div></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancel</button><button type="button" class="btn secondary" id="scan-github">Scan repository</button><button type="button" class="btn secondary" id="clone-github" disabled>Clone repository</button><button type="submit" class="btn primary" id="import-clone-selected" disabled>Import clone selected</button></div></form></div></div>');
     ctx.icons();
     const form=document.querySelector("#github-import-form"),select=form.elements.repo,branch=form.elements.branch,search=form.elements.search,mode=form.elements.mode;
     const filesBox=document.querySelector("#github-import-files"),summary=document.querySelector("#github-import-summary");
-    let entries=[];
-    const setBranch=()=>{const o=select.options[select.selectedIndex];branch.value=o?.dataset.default||"main"};
+    const scanBtn=document.querySelector("#scan-github"),cloneBtn=document.querySelector("#clone-github"),importBtn=document.querySelector("#import-clone-selected");
+    let entries=[],clonedEntries=[],cloned=false;
+    const setBranch=()=>{const o=select.options[select.selectedIndex];branch.value=o?.dataset.default||"main";cloned=false;clonedEntries=[];cloneBtn.disabled=true;importBtn.disabled=true;filesBox.innerHTML='<div class="empty">Repository changed. Scan it again.</div>'};
     const renderEntries=()=>{
-      const q=search.value.trim().toLowerCase(),shown=entries.filter(x=>!q||x.path.toLowerCase().includes(q));
-      summary.innerHTML='<span class="badge success">'+shown.length+' selectable text files</span><span class="badge neutral">Max 1 MB/file</span><span class="badge neutral">'+(mode.value==="merge"?"Existing files are preserved":"Selected files overwrite matching paths")+'</span>';
-      filesBox.innerHTML=shown.length?shown.slice(0,400).map(x=>'<label class="check"><input type="checkbox" name="path" value="'+esc(x.path)+'" checked><span><strong>'+esc(x.path)+'</strong><small class="muted"> '+Math.round((x.size||0)/1024)+' KB</small></span></label>').join(""):'<div class="empty">No matching files.</div>';
+      const q=search.value.trim().toLowerCase(),shown=clonedEntries.filter(x=>!q||x.path.toLowerCase().includes(q));
+      summary.innerHTML=cloned?'<span class="badge success">Repository cloned</span><span class="badge success">'+shown.length+' selectable text files</span><span class="badge neutral">Max 1 MB/file</span><span class="badge neutral">'+(mode.value==="merge"?"Existing files are preserved":"Selected files overwrite matching paths")+'</span>':'<span class="badge neutral">'+entries.length+' files found</span><span class="badge warning">Clone repository before selecting files</span>';
+      filesBox.innerHTML=cloned?(shown.length?shown.slice(0,400).map(x=>'<label class="check"><input type="checkbox" name="path" value="'+esc(x.path)+'" checked><span><strong>'+esc(x.path)+'</strong><small class="muted"> '+Math.round((x.size||0)/1024)+' KB</small></span></label>').join(""):'<div class="empty">No matching cloned files.</div>'):'<div class="empty">No repository cloned yet.</div>';
     };
     const scan=async()=>{
       const full=select.value,br=branch.value.trim()||"main";if(!full)throw new Error("Select a repository.");
       const [owner,name]=full.split("/");
       const tree=await githubRequest("/repos/"+owner+"/"+name+"/git/trees/"+encodeURIComponent(br)+"?recursive=1");
       entries=(tree.tree||[]).filter(x=>x.type==="blob"&&isTextPath(x.path)&&x.size<=1024*1024);
-      renderEntries();
+      cloned=false;clonedEntries=[];cloneBtn.disabled=!entries.length;importBtn.disabled=true;
+      summary.innerHTML='<span class="badge success">Repository scanned</span><span class="badge neutral">'+entries.length+' cloneable text files</span><span class="badge neutral">Next: Clone repository</span>';
+      filesBox.innerHTML='<div class="empty">Scan complete. Click "Clone repository" to load the repository files.</div>';
+    };
+    const clone=async()=>{
+      if(!entries.length)await scan();
+      if(!entries.length)throw new Error("No supported text files were found in the repository.");
+      const full=select.value,br=branch.value.trim()||"main";const [owner,name]=full.split("/");
+      cloneBtn.disabled=true;scanBtn.disabled=true;summary.innerHTML='<span class="badge warning">Cloning repository…</span>';
+      const clonedList=[];
+      for(const entry of entries){
+        const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs/"+entry.sha);
+        if(blob.encoding!=="base64")continue;
+        clonedList.push({...entry,content:decodeBase64(blob.content)});
+      }
+      clonedEntries=clonedList;cloned=true;scanBtn.disabled=false;importBtn.disabled=!clonedEntries.length;renderEntries();
+      ctx.toast("Repository cloned: "+clonedEntries.length+" files","success");
     };
     select.onchange=setBranch;setBranch();search.oninput=renderEntries;mode.onchange=renderEntries;
     document.querySelector("#close-modal").onclick=ctx.closeModal;document.querySelector("#cancel-modal").onclick=ctx.closeModal;
-    document.querySelector("#scan-github").onclick=async()=>{try{await scan();ctx.toast("Repository scanned","success")}catch(e){ctx.toast("Scan failed: "+e.message)}};
+    scanBtn.onclick=async()=>{try{await scan();ctx.toast("Repository scanned","success")}catch(e){ctx.toast("Scan failed: "+e.message)}};
+    cloneBtn.onclick=async()=>{try{await clone()}catch(e){cloneBtn.disabled=false;scanBtn.disabled=false;ctx.toast("Clone failed: "+e.message)}};
     form.onsubmit=async e=>{
-      e.preventDefault();if(!entries.length)await scan();
-      const selected=[...form.querySelectorAll('input[name="path"]:checked')].map(x=>x.value);if(!selected.length)throw new Error("Select at least one file.");
-      const full=select.value,br=branch.value.trim()||"main";const [owner,name]=full.split("/");
-      const existing=await ctx.supabase.from("site_files").select("id,path,content,is_protected").eq("site_id",site.id);if(existing.error)throw existing.error;
+      e.preventDefault();
+      if(!cloned){ctx.toast("Clone the repository first.");return}
+      const selected=[...form.querySelectorAll('input[name="path"]:checked')].map(x=>x.value);
+      if(!selected.length){ctx.toast("Select at least one cloned file.");return}
+      const full=select.value,br=branch.value.trim()||"main";const existing=await ctx.supabase.from("site_files").select("id,path,content,is_protected").eq("site_id",site.id);if(existing.error)throw existing.error;
       const byPath=new Map((existing.data||[]).map(x=>[x.path,x]));let imported=0,skipped=0;
       for(const path of selected){
-        const entry=entries.find(x=>x.path===path);if(!entry)continue;const current=byPath.get(path);
+        const entry=clonedEntries.find(x=>x.path===path);if(!entry)continue;const current=byPath.get(path);
         if(current?.is_protected&&mode.value==="merge"){skipped++;continue}
-        const blob=await githubRequest("/repos/"+owner+"/"+name+"/git/blobs/"+entry.sha);if(blob.encoding!=="base64")continue;
-        const content=decodeBase64(blob.content),payload={content,mime_type:mime(path),is_protected:path==="index.html",updated_at:new Date().toISOString()};
-        const q=current?ctx.supabase.from("site_files").update(payload).eq("id",current.id):ctx.supabase.from("site_files").insert({user_id:ctx.state.user.id,site_id:site.id,path,content,mime_type:mime(path),is_protected:path==="index.html"});
+        const payload={content:entry.content,mime_type:mime(path),is_protected:path==="index.html",updated_at:new Date().toISOString()};
+        const q=current?ctx.supabase.from("site_files").update(payload).eq("id",current.id):ctx.supabase.from("site_files").insert({user_id:ctx.state.user.id,site_id:site.id,path,content:entry.content,mime_type:mime(path),is_protected:path==="index.html"});
         const res=await q;if(res.error)throw res.error;imported++;
       }
-      ctx.state.github.repo={full_name:full,branch:br};await ctx.supabase.from("sites").update({updated_at:new Date().toISOString()}).eq("id",site.id);
-      ctx.closeModal();ctx.toast("Imported "+imported+" files"+(skipped?" · "+skipped+" protected files skipped":""),"success");await ctx.reloadSiteFiles();ctx.renderAll();ctx.showView("files");
+      ctx.state.github.repo={full_name:full,branch:br};
+      await ctx.supabase.from("sites").update({updated_at:new Date().toISOString()}).eq("id",site.id);
+      ctx.closeModal();ctx.toast("Imported clone: "+imported+" files"+(skipped?" · "+skipped+" protected files skipped":""),"success");await ctx.reloadSiteFiles();ctx.renderAll();ctx.showView("files");
     };
   }catch(e){ctx.toast("GitHub import failed: "+e.message)}
 }
