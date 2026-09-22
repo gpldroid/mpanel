@@ -166,15 +166,35 @@ drop policy if exists post_categories_owner_all on public.post_categories;
 create policy post_categories_member_select on public.post_categories for select
 using (exists(select 1 from public.posts p where p.id=post_id and public.site_has_capability(p.site_id,'content.read')));
 create policy post_categories_content_write on public.post_categories for all
-using (exists(select 1 from public.posts p where p.id=post_id and public.site_has_capability(p.site_id,'content.write')))
-with check (exists(select 1 from public.posts p where p.id=post_id and public.site_has_capability(p.site_id,'content.write')));
+using (
+  exists(select 1 from public.posts p where p.id=post_id and (
+    public.site_has_capability(p.site_id,'content.write')
+    or (public.site_has_capability(p.site_id,'content.own.write') and p.user_id=auth.uid())
+  ))
+)
+with check (
+  exists(select 1 from public.posts p where p.id=post_id and (
+    public.site_has_capability(p.site_id,'content.write')
+    or (public.site_has_capability(p.site_id,'content.own.write') and p.user_id=auth.uid())
+  ))
+);
 
 drop policy if exists post_tags_owner_all on public.post_tags;
 create policy post_tags_member_select on public.post_tags for select
 using (exists(select 1 from public.posts p where p.id=post_id and public.site_has_capability(p.site_id,'content.read')));
 create policy post_tags_content_write on public.post_tags for all
-using (exists(select 1 from public.posts p where p.id=post_id and public.site_has_capability(p.site_id,'content.write')))
-with check (exists(select 1 from public.posts p where p.id=post_id and public.site_has_capability(p.site_id,'content.write')));
+using (
+  exists(select 1 from public.posts p where p.id=post_id and (
+    public.site_has_capability(p.site_id,'content.write')
+    or (public.site_has_capability(p.site_id,'content.own.write') and p.user_id=auth.uid())
+  ))
+)
+with check (
+  exists(select 1 from public.posts p where p.id=post_id and (
+    public.site_has_capability(p.site_id,'content.write')
+    or (public.site_has_capability(p.site_id,'content.own.write') and p.user_id=auth.uid())
+  ))
+);
 
 -- Design.
 drop policy if exists layout_sections_owner_all on public.layout_sections;
@@ -204,7 +224,20 @@ create policy site_seo_editor_write on public.site_seo_settings for all using(pu
 
 drop policy if exists content_revisions_owner_all on public.content_revisions;
 create policy content_revisions_member_select on public.content_revisions for select using(public.site_has_capability(site_id,'content.read'));
-create policy content_revisions_content_write on public.content_revisions for insert with check(public.site_has_capability(site_id,'content.write') and user_id=auth.uid());
+create policy content_revisions_content_write on public.content_revisions for insert
+with check(
+  user_id=auth.uid()
+  and (
+    public.site_has_capability(site_id,'content.write')
+    or (
+      public.site_has_capability(site_id,'content.own.write')
+      and (
+        (entity_type='post' and exists(select 1 from public.posts p where p.id=entity_id and p.user_id=auth.uid()))
+        or (entity_type='page' and exists(select 1 from public.pages p where p.id=entity_id and p.user_id=auth.uid()))
+      )
+    )
+  )
+);
 
 drop policy if exists site_integrations_owner_all on public.site_integrations;
 create policy site_integrations_member_select on public.site_integrations for select using(public.site_has_capability(site_id,'content.read'));
