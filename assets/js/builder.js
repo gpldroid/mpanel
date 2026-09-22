@@ -9,7 +9,7 @@ function theme(state){
 function depth(path){return String(path||"").split("/").filter(Boolean).length>1?1:0}
 function href(path,current="index.html"){
  const clean=String(path||"").replace(/^\//,"");
- const d=current==="index.html"?0:1;
+ const d=String(current||"").includes("/")?1:0;
  return (d?"../":"./")+clean;
 }
 function navHtml(state,current){
