@@ -14,7 +14,7 @@ async function loadFeatureModules(){
     ["Builder",()=>import("./builder.js")],
     ["Analytics",()=>import("./analytics.js")],
     ["Builder UI",()=>import("./builder-ui.js")],
-    ["Workspace IO",()=>import("./workspace-io.js?v=20260922-002")]
+    ["Workspace IO",()=>import("./workspace-io.js?v=20260922-003")]
   ];
   const results=await Promise.allSettled(modules.map(([,loader])=>loader()));
   const failures=[];
@@ -297,8 +297,11 @@ function renderFiles(){
  each(".file-item:not(.binary-item)",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;state.selectedBinary=asset;state.selectedFile=null;renderFiles();updatePreview()});
  $("#file-search").oninput=e=>{each(".file-item",b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
+ $("#rename-binary")?.addEventListener("click",async()=>{if(!state.selectedBinary)return;const next=prompt("New asset path",state.selectedBinary.path);if(!next)return;try{const mod=await import("./workspace-io.js?v=20260922-003");const updated=await mod.renameBinaryAsset(state.selectedBinary,next);state.selectedBinary=updated;await loadSiteFiles();renderFiles();updatePreview();toast("Asset renamed","success")}catch(error){toast("Rename failed: "+authError(error))}});
+ $("#delete-binary")?.addEventListener("click",async()=>{if(!state.selectedBinary)return;if(!confirm("Delete "+state.selectedBinary.path+" permanently?"))return;try{const mod=await import("./workspace-io.js?v=20260922-003");await mod.deleteBinaryAsset(state.selectedBinary);state.selectedBinary=null;await loadSiteFiles();renderFiles();updatePreview();toast("Asset deleted","success")}catch(error){toast("Delete failed: "+authError(error))}});
  $("#history-file")?.addEventListener("click",openFileHistory);$("#recovery-files")?.addEventListener("click",openFileRecovery);
  $("#delete-file")?.addEventListener("click",deleteSelectedFile);
+ $("#preview-page")?.addEventListener("change",e=>{state.previewPagePath=e.target.value||"index.html";updatePreview()});
  $("#refresh-preview")?.addEventListener("click",updatePreview);
  $("#open-preview")?.addEventListener("click",()=>{const src=$("#workspace-preview")?.srcdoc;if(src)window.open(URL.createObjectURL(new Blob([src],{type:"text/html"})),"_blank","noopener")});
 }
