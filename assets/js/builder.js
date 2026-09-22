@@ -101,6 +101,41 @@ function notFoundContent(state,current){
  return {content:renderTemplateContent(state,"404",fallback,current,{content:fallback}),schema:{"@context":"https://schema.org","@type":"WebPage","name":"Page not found"}};
 }
 
+export function validateBuild(state){
+ const errors=[],warnings=[],site=state.selectedSite,seo=state.siteSeo||{};
+ if(!site)errors.push("No website is selected.");
+ if(site&&!String(site.name||"").trim())errors.push("Website name is required.");
+ if(site&&!String(site.url||"").trim())errors.push("Website URL is required.");
+ if(site&&!seo.canonical_base)warnings.push("Canonical base URL is not configured; generated canonical URLs and sitemap locations may be incomplete.");
+ if(seo.canonical_base){
+  try{new URL(seo.canonical_base)}catch{errors.push("Canonical base URL is invalid.")}
+ }
+ const seen=new Set();
+ for(const p of state.posts||[]){
+  if(p.status!=="published")continue;
+  const key=slug(p.slug||p.title);
+  if(!key)errors.push("A published post has an empty slug.");
+  if(seen.has("post:"+key))errors.push("Duplicate published post slug: "+key);
+  seen.add("post:"+key);
+  if(!String(p.title||"").trim())errors.push("A published post is missing its title.");
+  if(String(p.meta_description||p.excerpt||"").length>160)warnings.push("Post meta description exceeds 160 characters: "+key);
+ }
+ const pageSeen=new Set();
+ for(const p of state.pages||[]){
+  if(p.status!=="published")continue;
+  const key=slug(p.slug||p.title);
+  if(!key)errors.push("A published page has an empty slug.");
+  if(pageSeen.has(key))errors.push("Duplicate published page slug: "+key);
+  pageSeen.add(key);
+  if(!String(p.title||"").trim())errors.push("A published page is missing its title.");
+  if(String(p.meta_description||"").length>160)warnings.push("Page meta description exceeds 160 characters: "+key);
+ }
+ const files=state.builderBlocks||[];
+ if(files.some(b=>b.enabled&&b.block_type==="image"&&b.content&&!b.content.url))warnings.push("An enabled image builder block has no image URL.");
+ if(state.siteSeo?.sitemap_enabled!==false&&!seo.canonical_base)warnings.push("Sitemap generation is enabled but canonical base is empty.");
+ return {ok:errors.length===0,errors,warnings};
+}
+
 export function buildSiteFiles(state){
  const files=[],published=(state.posts||[]).filter(p=>p.status==="published"),pages=(state.pages||[]).filter(p=>p.status==="published");
  const homeFallback='<section><h1>'+esc(state.siteSeo?.site_title||state.selectedSite?.name||"Website")+'</h1><p>'+esc(state.siteSeo?.meta_description||state.selectedSite?.description||"")+'</p><div class="post-list">'+published.slice(0,10).map(p=>'<article class="post-card"><h2><a href="'+esc(href("posts/"+slug(p.slug)+".html","index.html"))+'">'+esc(p.title)+'</a></h2><p>'+esc(p.excerpt||p.meta_description||"")+'</p></article>').join("")+'</div></section>';
