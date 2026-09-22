@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           for n in 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018; do
-            test -f "supabase/migrations/${n}_"*.sql
+            find supabase/migrations -maxdepth 1 -type f -name "${n}_*.sql" -print -quit | grep -q .
           done
 
 
