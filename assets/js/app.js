@@ -9,6 +9,7 @@ import { publishGeneratedSite, loadGitHubIntegration } from "./integrations/gith
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[]};
+window.__mPanelState=state;
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const each=(selector,callback)=>{
