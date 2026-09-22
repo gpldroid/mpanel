@@ -46,6 +46,7 @@ function repoOptions(repos,current){
   return repos.map(r=>'<option value="'+esc(r.full_name)+'" data-default="'+esc(r.default_branch||"main")+'" '+(current===r.full_name?"selected":"")+'>'+esc(r.full_name)+(r.private?" · private":"")+'</option>').join("");
 }
 async function openGitHubImport(){
+  if(ctx.openWorkspaceIO){ctx.openWorkspaceIO();return}
   if(!ctx.state.github.token){ctx.showView("github");ctx.toast("Connect your GitHub account first.");return}
   const site=ctx.state.selectedSite;
   if(!site){ctx.showView("sites");ctx.toast("Select a website first.");return}
