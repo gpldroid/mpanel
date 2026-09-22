@@ -131,11 +131,24 @@ function renderAll(){
 }
 
 function renderDashboard(){
+ const s=cmsSite(),seoScoreValue=seoScore(state.siteSeo||{}),preflight=validateBuild(state);
+ const latest=state.deployments?.[0],analyticsOn=state.analyticsSettings?.enabled!==false&&!!state.analyticsSettings;
+ const repo=state.github.repo;
+ const pipeline=[
+  ["Content",!!s&&((state.posts||[]).length+(state.pages||[]).length)>0,"posts / pages"],
+  ["Design",!!s&&((state.design?.layout||[]).length>0||(state.design?.widgets||[]).length>0||!!state.design?.theme),"layout / theme"],
+  ["SEO",!!s&&seoScoreValue>=70,"score "+seoScoreValue+"%"],
+  ["Build",preflight.ok,"preflight "+(preflight.ok?"ready":"blocked")],
+  ["GitHub",!!repo,"repository "+(repo?.full_name||"not selected")],
+  ["Deployment",latest?.status==="success","last "+(latest?.status||"not deployed")],
+  ["Analytics",analyticsOn,"tracking "+(analyticsOn?"enabled":"disabled")]
+ ];
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
  stat("Total sites",state.sites.length,"globe-2")+stat("Active sites",state.sites.filter(s=>s.status==="active").length,"check-circle-2")+stat("Domains",state.domains.length,"link-2")+stat("SEO checks",state.seo.length,"search-check")+
- '</div><div class="grid two-col"><section class="card"><div class="section-head"><h3>Recent websites</h3><button class="btn secondary" data-go="sites">View all</button></div>'+
+ '</div><section class="card" style="margin-top:18px"><div class="section-head"><div><h3>Publishing pipeline</h3><p class="muted">The selected website flows from content and design through SEO, build, GitHub, deployment and analytics.</p></div><span class="badge '+(preflight.ok?"success":"warning")+'">'+(preflight.ok?"Build ready":"Build needs attention")+'</span></div><div class="pipeline-grid">'+pipeline.map((x,i)=>'<div class="pipeline-step"><span class="pipeline-index">'+(i+1)+'</span><div><strong>'+esc(x[0])+'</strong><small class="muted">'+esc(x[2])+'</small></div><span class="badge '+(x[1]?"success":"warning")+'">'+(x[1]?"Ready":"Needs setup")+'</span></div>').join("")+'</div>'+(preflight.warnings.length?'<div class="tiny muted" style="margin-top:12px">'+esc(preflight.warnings.slice(0,2).join(" • "))+'</div>':"")+'</section>'+
+ '<div class="grid two-col" style="margin-top:18px"><section class="card"><div class="section-head"><h3>Recent websites</h3><button class="btn secondary" data-go="sites">View all</button></div>'+
  (state.sites.length?'<div class="site-list">'+state.sites.slice(0,5).map(siteRow).join("")+'</div>':'<div class="empty"><i data-lucide="globe"></i><p>No websites yet.</p><button class="btn primary" id="dash-add-site">Add your first site</button></div>')+
- '</section><section class="card"><div class="section-head"><h3>Free plan</h3><span class="badge success">Active</span></div><p class="muted">Manage up to 3 websites with domains, SEO tasks and basic monitoring.</p><div class="progress"><i style="width:'+Math.min(100,state.sites.length/3*100)+'%"></i></div><p class="tiny muted">'+state.sites.length+' of 3 website slots used.</p></section></div>';
+ '</section><section class="card"><div class="section-head"><h3>Free plan</h3><span class="badge success">Active</span></div><p class="muted">Manage up to 3 websites with domains, SEO tasks and basic monitoring.</p><div class="progress"><i style="width:'+Math.min(100,state.sites.length/3*100)+'%"></i></div><p class="tiny muted">'+state.sites.length+' of 3 website slots used.</p>'+(latest?'<div class="site-list" style="margin-top:14px"><div class="site-row"><span>Latest deployment</span><strong>'+esc(latest.status||"—")+'</strong></div><div class="site-row"><span>Commit</span><code>'+esc((latest.commit_sha||"").slice(0,8)||"—")+'</code></div></div>':"")+'</section></div>';
  $("#dash-add-site")?.addEventListener("click",()=>openSiteModal());
  each("[data-go]",b=>b.onclick=()=>showView(b.dataset.go));
 }
@@ -508,11 +521,35 @@ function buildHash(files){
  for(const f of files){const s=f.path+"\\0"+f.content;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}}
  return ("00000000"+(h>>>0).toString(16)).slice(-8);
 }
+async function publishDueScheduled(){
+ const s=cmsSite();
+ if(!s){toast("Select a website first.");return}
+ try{
+  const r=await supabase.rpc("publish_due_posts",{p_site_id:s.id});
+  if(r.error)throw r.error;
+  const count=Number(r.data||0);
+  await loadCms();
+  renderAll();
+  if(count>0){
+   toast(count+" scheduled post(s) moved to published. Starting build and deployment…","success");
+   await publishCurrentSite();
+  }else{
+   toast("No scheduled posts are due for this website.","success");
+  }
+ }catch(error){toast("Scheduled publishing failed: "+authError(error))}
+}
 async function publishCurrentSite(){
  const s=cmsSite();if(!s){toast("Select a website first.");return}
  try{
   const preflight=validateBuild(state);
-  if(!preflight.ok){showView("publishing");toast("Build blocked: "+preflight.errors[0]);return}
+  if(!preflight.ok){
+   showView("publishing");
+   renderPublishing();
+   toast("Build blocked: "+preflight.errors[0]);
+   return;
+  }
+  if(!state.github.connected){showView("github");toast("Connect GitHub before deploying this website.");return}
+  if(!state.github.repo){showView("github");toast("Select and save a GitHub repository before deploying.");return}
   showView("publishing");
   const filesNow=buildSiteFiles(state),hash=buildHash(filesNow),r=await publishGeneratedSite(filesNow,"mPanel: publish "+s.name);
   await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:r.repository,branch:r.branch,commit_sha:r.sha,status:r.verified?"success":"failed",files_count:r.files,message:r.verified?"Published and verified":"Published but verification failed",build_hash:hash,verified:!!r.verified,verification_status:r.verified?"verified":"failed",verification_message:r.verification_message||"",verified_at:r.verified?new Date().toISOString():null,deleted_files:r.deleted||0,manifest_sha:r.manifest_sha||null,previous_commit_sha:r.previous_commit_sha||null});
@@ -526,13 +563,16 @@ async function publishCurrentSite(){
 window.__mPanelPublish=publishCurrentSite;
 
 function renderPublishing(){
- const s=cmsSite(),files=s?buildSiteFiles(state):[],preview=files.find(x=>x.path==="index.html")?.content||"",deployments=state.deployments||[];
- $("#view-publishing").innerHTML='<div class="toolbar"><div><h3>Publishing</h3><p class="muted">Build the website from CMS content, design and SEO, then publish it to the selected GitHub repository.</p></div><button class="btn primary" id="build-publish"><i data-lucide="rocket"></i>Publish website</button></div>'+
- (s?'<div class="grid two-col"><section class="card"><div class="section-head"><h3>Build output</h3><span class="badge success">'+files.length+' files</span></div><div class="site-list">'+files.slice(0,12).map(f=>'<div class="site-row"><span>'+esc(f.path)+'</span><small class="muted">'+f.mime_type+'</small></div>').join("")+(files.length>12?'<div class="tiny muted">+'+(files.length-12)+' more files</div>':"")+'</div></section><section class="card"><div class="section-head"><h3>Generated preview</h3><button class="btn secondary" id="refresh-build-preview">Refresh</button></div><iframe id="build-preview" class="preview-frame" style="min-height:480px" sandbox="allow-scripts"></iframe></section></div><section class="card" style="margin-top:18px"><h3>Deployment history</h3><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Repository</th><th>Branch</th><th>Files</th><th>Commit</th><th>Date</th></tr></thead><tbody>'+ (deployments.length?deployments.map(d=>'<tr><td><span class="badge '+(d.status==="success"?"success":d.status==="failed"?"warning":"neutral")+'">'+esc(d.status)+'</span></td><td>'+esc(d.repository||"—")+'</td><td>'+esc(d.branch||"—")+'</td><td>'+d.files_count+'</td><td><code>'+esc((d.commit_sha||"").slice(0,8))+'</code></td><td>'+dt(d.created_at)+'</td></tr>').join(""):'<tr><td colspan="6" class="empty">No deployments yet.</td></tr>')+'</tbody></table></div></section>':'<div class="card empty">Select a website first.</div>');
+ const s=cmsSite(),files=s?buildSiteFiles(state):[],preview=files.find(x=>x.path==="index.html")?.content||"",deployments=state.deployments||[],preflight=s?validateBuild(state):{ok:false,errors:["Select a website first."],warnings:[]};
+ $("#view-publishing").innerHTML='<div class="toolbar"><div><h3>Publishing</h3><p class="muted">Content → Design → SEO → Build → GitHub → Deployment → Analytics.</p></div><div class="workspace-actions"><button class="btn secondary" id="build-validate"><i data-lucide="shield-check"></i>Validate build</button><button class="btn secondary" id="publish-due"><i data-lucide="calendar-check"></i>Publish due posts</button><button class="btn primary" id="build-publish"><i data-lucide="rocket"></i>Build & deploy</button></div></div>'+
+ (s?'<section class="card"><div class="section-head"><div><h3>Preflight</h3><p class="muted">Validation runs against the currently selected website and its published content.</p></div><span class="badge '+(preflight.ok?"success":"warning")+'">'+(preflight.ok?"Ready":"Blocked")+'</span></div>'+(preflight.errors.length?'<div class="checklist">'+preflight.errors.map(x=>'<div class="check"><span><strong>Build error</strong><small class="muted">'+esc(x)+'</small></span></div>').join("")+'</div>':"")+(preflight.warnings.length?'<div class="checklist" style="margin-top:10px">'+preflight.warnings.slice(0,8).map(x=>'<div class="check"><span><strong>Warning</strong><small class="muted">'+esc(x)+'</small></span></div>').join("")+'</div>':"")+'</section><div class="grid two-col" style="margin-top:18px"><section class="card"><div class="section-head"><h3>Build output</h3><span class="badge success">'+files.length+' files</span></div><div class="site-list">'+files.slice(0,12).map(f=>'<div class="site-row"><span>'+esc(f.path)+'</span><small class="muted">'+f.mime_type+'</small></div>').join("")+(files.length>12?'<div class="tiny muted">+'+(files.length-12)+' more files</div>':"")+'</div></section><section class="card"><div class="section-head"><h3>Generated preview</h3><button class="btn secondary" id="refresh-build-preview">Refresh</button></div><iframe id="build-preview" class="preview-frame" style="min-height:480px" sandbox="allow-scripts"></iframe></section></div><section class="card" style="margin-top:18px"><div class="section-head"><h3>Deployment history</h3><span class="tiny muted">'+(deployments.length?"Latest first":"No deployments")+'</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Repository</th><th>Branch</th><th>Files</th><th>Commit</th><th>Verification</th><th>Date</th></tr></thead><tbody>'+ (deployments.length?deployments.map(d=>'<tr><td><span class="badge '+(d.status==="success"?"success":d.status==="failed"?"warning":"neutral")+'">'+esc(d.status)+'</span></td><td>'+esc(d.repository||"—")+'</td><td>'+esc(d.branch||"—")+'</td><td>'+d.files_count+'</td><td><code>'+esc((d.commit_sha||"").slice(0,8))+'</code></td><td>'+esc(d.verification_status||"—")+'</td><td>'+dt(d.created_at)+'</td></tr>').join(""):'<tr><td colspan="7" class="empty">No deployments yet.</td></tr>')+'</tbody></table></div></section>':'<div class="card empty">Select a website first.</div>');
  $("#build-publish")?.addEventListener("click",publishCurrentSite);
+ $("#publish-due")?.addEventListener("click",publishDueScheduled);
+ $("#build-validate")?.addEventListener("click",()=>{const p=validateBuild(state);toast(p.ok?("Build preflight passed"+(p.warnings.length?" with "+p.warnings.length+" warning(s).":".")):"Build blocked: "+p.errors[0],p.ok?"success":"error");renderPublishing()});
  $("#refresh-build-preview")?.addEventListener("click",()=>{const f=$("#build-preview");if(f)f.srcdoc=buildPreview(state)});
  const f=$("#build-preview");if(f)f.srcdoc=preview;
 }
+
 function renderSeo(){
  const done=state.seo.filter(x=>x.completed).length,total=state.seo.length,pct=total?Math.round(done/total*100):0; const data=state.siteSeo||{}; const score=seoScore(data);
  $("#view-seo").innerHTML='<div class="section-head"><div><h3>SEO checklist</h3><p class="muted">Track essential on-page SEO tasks.</p></div><span class="badge neutral">'+pct+'% complete</span></div><div class="grid two-col"><section class="card"><div class="progress"><i style="width:'+pct+'%"></i></div><div class="checklist" style="margin-top:16px">'+
