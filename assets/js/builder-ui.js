@@ -41,6 +41,7 @@ async function load(){
  templates=a.data||[];blocks=b.data||[];
  activeTemplate=templates.find(x=>x.is_default)||templates[0]||null;
  if(activeTemplate)blocks=blocks.filter(x=>x.template_id===activeTemplate.id).sort((a,b)=>a.position-b.position);
+ if(ctx.state){ctx.state.builderTemplates=templates;ctx.state.builderBlocks=blocks;}
 }
 
 function templateList(){
