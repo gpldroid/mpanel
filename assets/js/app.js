@@ -37,7 +37,7 @@ async function loadFeatureModules(){
   return failures;
 }
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
-const state={user:null,sites:[],domains:[],seo:[],files:[],adminSettings:null,permissions:null,selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
+const state={user:null,sites:[],domains:[],seo:[],files:[],binaryFiles:[],adminSettings:null,permissions:null,selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
 window.__mPanelState=state;
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -272,23 +272,27 @@ async function renderWebsiteAdminTab(site,tab){
  }catch(error){panel.innerHTML='<div class="empty"><strong>Administration unavailable</strong><p class="muted">'+esc(authError(error))+'</p><p class="tiny muted">If migration 015 has not been run in Supabase yet, run it before using these controls.</p></div>'}
 }
 async function loadSiteFiles(){
- if(!state.selectedSite){state.files=[];return}
- const {data,error}=await supabase.from("site_files").select("*").eq("site_id",state.selectedSite.id).is("deleted_at",null).order("path");
- if(error){toast(authError(error));state.files=[]}else state.files=data||[];
+ if(!state.selectedSite){state.files=[];state.binaryFiles=[];return}
+ const [textRows,binaryRows]=await Promise.all([
+  supabase.from("site_files").select("*").eq("site_id",state.selectedSite.id).is("deleted_at",null).order("path"),
+  supabase.from("site_binary_files").select("*").eq("site_id",state.selectedSite.id).order("path")
+ ]);
+ if(textRows.error){toast(authError(textRows.error));state.files=[]}else state.files=textRows.data||[];
+ if(binaryRows.error){state.binaryFiles=[];if(binaryRows.error.code!=="42P01")console.warn("[mPanel binary files]",binaryRows.error)}else state.binaryFiles=binaryRows.data||[];
 }
 function renderFiles(){
  const s=state.selectedSite;
  if(!s){$("#view-files").innerHTML='<div class="card workspace-empty"><div><h3>No website selected</h3><button class="btn primary" id="files-go-sites">Choose a website</button></div></div>';$("#files-go-sites")?.addEventListener("click",()=>showView("sites"));return}
  const file=state.selectedFile;
  $("#view-files").innerHTML='<div class="workspace-head"><div><span class="eyebrow">FILE MANAGER</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><p class="muted">Edit website source files safely with version snapshots.</p></div><div class="workspace-actions"><button class="btn secondary" id="files-back"><i data-lucide="arrow-left"></i>Overview</button><button class="btn secondary" id="github-file-import"><i data-lucide="github"></i>GitHub</button><button class="btn secondary" id="github-file-push"><i data-lucide="upload"></i>Push</button><button class="btn primary" id="new-file"><i data-lucide="file-plus-2"></i>New file</button></div></div>'+
- '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Website files</h3><span class="badge neutral">'+state.files.length+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+'</div></aside>'+
+ '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Project files</h3><span class="badge neutral">'+(state.files.length+(state.binaryFiles||[]).length)+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+(state.binaryFiles||[]).map(x=>'<button class="file-item binary-item" data-binary-id="'+x.id+'"><i data-lucide="'+(x.mime_type?.startsWith("image/")?"image":"paperclip")+'"></i><span>'+esc(x.path)+'</span><span class="protected-file">'+Math.ceil((x.size_bytes||0)/1024)+' KB</span></button>').join("")+'</div></div></aside>'+
  '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn secondary" id="recovery-files"><i data-lucide="archive-restore"></i>Recovery</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
  '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
  $("#github-file-import").onclick=()=>openGitHubImport();
  $("#github-file-push").onclick=()=>pushSiteToGitHub();
  $("#new-file").onclick=openNewFileModal;
- each(".file-item",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()});
+ each(".file-item",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;const r=await supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);if(r.error){toast(authError(r.error));return}downloadAssetBlob(r.data,asset.path)});
  $("#file-search").oninput=e=>{each(".file-item",b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
  $("#history-file")?.addEventListener("click",openFileHistory);$("#recovery-files")?.addEventListener("click",openFileRecovery);
@@ -315,6 +319,7 @@ async function saveSelectedFile(){
  await supabase.rpc("write_audit_log",{p_action:"update_file",p_entity_type:"site_file",p_entity_id:data.id,p_details:{path:data.path,site_id:data.site_id}});
  toast("File saved and previous version recorded","success");renderFiles();renderTheme();renderManager();updatePreview();
 }
+function downloadAssetBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.split("/").pop()||"asset";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}
 function previewDocument(){
  const html=state.files.find(x=>x.path==="index.html")?.content||"";
  const css=state.files.find(x=>x.path==="style.css")?.content||"";
