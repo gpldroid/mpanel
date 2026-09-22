@@ -302,6 +302,14 @@ async function loadCms(){
   ]);
   [p,pg,c,t].forEach(r=>{if(r.error)toast(authError(r.error))});
   state.posts=p.data||[];state.pages=pg.data||[];state.categories=c.data||[];state.tags=t.data||[];
+  if(s?.id){
+    const due=await supabase.rpc("publish_due_posts",{p_site_id:s.id});
+    if(!due.error&&Number(due.data||0)>0){
+      const refreshed=await supabase.from("posts").select("*").eq("site_id",s.id).order("updated_at",{ascending:false});
+      if(!refreshed.error)state.posts=refreshed.data||state.posts;
+      toast(Number(due.data)+" scheduled post(s) published automatically.","success");
+    }
+  }
 }
 function postStatusBadge(status){
   const cls=status==="published"?"success":status==="scheduled"?"warning":"neutral";
