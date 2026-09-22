@@ -22,9 +22,9 @@ Migration 009 adds `site_analytics_settings` and `analytics_events`. Anonymous p
 ## Builder and deployment completion
 
 - **Builder publishing:** Builder now exposes a direct Publish action and uses the same atomic GitHub publishing pipeline as the Publishing view.
-- **Archive / 404:** generated sites include `archive.html` and `404.html`; GitHub Pages supports a repository-root `404.html` custom error page. citeturn0search0
+- **Archive / 404:** generated sites include `archive.html` and `404.html`; GitHub Pages supports a repository-root `404.html` custom error page.
 - **SEO / Schema:** generated posts/pages emit page-specific canonical URLs and JSON-LD schema; Advanced SEO also accepts a custom JSON-LD object.
 - **Theme Presets:** reusable user presets can be saved, applied and deleted from Theme and Builder.
 - **File safety:** workspace file deletion is an archive operation after migration 011; archived files can be restored without destroying their version history.
 - **Production verification:** publishing verifies the target branch ref, mPanel manifest and `index.html` after the atomic commit. Deployment history records verification status and commit metadata.
-- **Static GitHub Pages:** generated output includes `.nojekyll` so the static build can be served without Jekyll processing; GitHub Pages requires a top-level `index.html` for branch-based publishing. citeturn0search5turn0search2
+- **Static GitHub Pages:** generated output includes `.nojekyll` so the static build can be served without Jekyll processing; GitHub Pages requires a top-level `index.html` for branch-based publishing.
