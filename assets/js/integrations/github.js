@@ -165,7 +165,6 @@ async function verifyPublishedSite(repo,expectedCommit,expectedPaths){
     return {ok:true,message:"GitHub branch, manifest and index.html verified.",manifest_sha:manifestBlob.sha};
   }catch(e){return {ok:false,message:"Repository verification failed: "+String(e.message||e)}}
 }
-}
 function renderGitHub(state){
   const el=document.querySelector("#view-github");if(!el)return;
   const connected=!!state.github.connected, repo=state.github.repo;
