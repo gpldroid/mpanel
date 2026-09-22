@@ -2,21 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#4f46e5"><meta name="description" content="mPanel — responsive website management dashboard with CMS, SEO, GitHub publishing and analytics."><meta name="application-name" content="mPanel"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/icons/icon-192.svg" type="image/svg+xml">
-<title>mPanel — Website Management</title><link rel="stylesheet" href="assets/css/style.css?v=20260922-007">
+<meta name="theme-color" content="#4f46e5"><meta name="description" content="mPanel Premium — complete website management dashboard with CMS, SEO, GitHub, analytics, builder and publishing."><meta name="application-name" content="mPanel"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/icons/icon-192.svg" type="image/svg+xml">
+<title>mPanel — Website Management</title><link rel="stylesheet" href="assets/css/style.css?v=20260922-008">
 </head>
 <body>
 <div id="toast-root" aria-live="polite"></div>
 <section id="auth-view" class="auth-shell"><div class="auth-card">
 <div class="brand large"><span class="brand-mark">M</span><span>mPanel</span></div>
-<p class="eyebrow">FREE WEBSITE MANAGEMENT</p><h1 id="auth-title">Manage your websites in one place.</h1>
+<p class="eyebrow">PREMIUM WEBSITE MANAGEMENT</p><h1 id="auth-title">Manage your websites in one place.</h1>
 <p class="muted" id="auth-subtitle">Sign in to manage sites, domains and SEO tasks.</p>
 <form id="auth-form"><label>Email<input id="auth-email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
 <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••••"></label>
 <button class="btn primary full" id="auth-submit" type="submit">Sign in</button></form>
 <div class="auth-divider"><span>or</span></div>
 <button class="btn secondary full oauth-github" id="github-auth-btn" type="button"><i data-lucide="github"></i><span>Continue with GitHub</span></button>
-<button class="link-button" id="auth-toggle" type="button">Create a free account</button>
+<button class="link-button" id="auth-toggle" type="button">Create your account</button>
 <div class="connection-box" id="connection-box" aria-live="polite"><div class="connection-head"><span class="connection-dot" id="connection-dot"></span><strong id="connection-title">Connection not tested</strong></div><p class="tiny muted" id="connection-detail">Use the button below to test the Supabase connection from this browser.</p><button class="btn secondary full" id="connection-test" type="button">Test Supabase connection</button></div>
 <p class="tiny muted">Protected by Supabase Auth and PostgreSQL Row Level Security.</p></div></section>
 <section id="app-view" class="app-shell hidden"><aside class="sidebar" id="sidebar">
@@ -46,12 +46,12 @@
 <button class="nav-item" data-view="monitoring"><span data-lucide="activity"></span>Monitoring</button>
 <button class="nav-item" data-view="settings"><span data-lucide="settings"></span>Settings</button>
 </nav></div><div class="sidebar-bottom"><button class="sidebar-close mobile-only" id="sidebar-close" type="button"><span data-lucide="x"></span>Close menu</button>
-<div class="plan-card"><span class="status-dot"></span><div><strong>Free plan</strong><small id="plan-usage">0 / 3 sites</small></div></div>
+<div class="plan-card"><span class="status-dot"></span><div><strong>Premium plan</strong><small id="plan-usage">0 sites · Unlimited</small></div></div>
 <button class="nav-item danger" id="logout-btn"><span data-lucide="log-out"></span>Sign out</button></div></aside>
 <main class="main"><header class="topbar"><button class="icon-btn mobile-only" id="menu-btn"><span data-lucide="menu"></span></button>
 <div class="topbar-context"><div><span class="eyebrow">WEBSITE CONTROL CENTER</span><h2 id="page-title">Dashboard</h2></div><label class="site-switcher"><span>Site</span><select id="site-context" aria-label="Current website"><option value="">No website selected</option></select></label></div>
 <div class="top-actions"><button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><span data-lucide="sun"></span></button><div class="account-wrap"><button class="avatar" id="profile-btn" aria-label="Account menu" aria-expanded="false"><span id="avatar-letter">U</span></button><div class="account-menu hidden" id="account-menu" role="menu"><div class="account-menu-head"><strong id="account-email">Account</strong><span class="tiny muted">Supabase Auth</span></div><button class="account-menu-item" id="account-settings" role="menuitem"><span data-lucide="settings"></span>Account settings</button><button class="account-menu-item danger" id="account-logout" role="menuitem"><span data-lucide="log-out"></span>Sign out</button></div></div></div></header>
 <div class="content"><div id="view-dashboard" class="view"></div><div id="view-manager" class="view hidden"></div><div id="view-posts" class="view hidden"></div><div id="view-pages" class="view hidden"></div><div id="view-categories" class="view hidden"></div><div id="view-tags" class="view hidden"></div><div id="view-layout" class="view hidden"></div><div id="view-widgets" class="view hidden"></div><div id="view-navigation" class="view hidden"></div><div id="view-files" class="view hidden"></div><div id="view-github" class="view hidden"></div><div id="view-publishing" class="view hidden"></div><div id="view-theme" class="view hidden"></div><div id="view-builder" class="view hidden"></div><div id="view-sites" class="view hidden"></div><div id="view-domains" class="view hidden"></div><div id="view-seo" class="view hidden"></div><div id="view-monitoring" class="view hidden"></div><div id="view-analytics" class="view hidden"></div><div id="view-settings" class="view hidden"></div></div>
 </main></section><div id="modal-root"></div>
-<script src="https://unpkg.com/lucide@latest"></script><script type="module" src="assets/js/app.js?v=20260922-018"></script><script type="module" src="assets/js/platform.js?v=20260922-005"></script><script type="module" src="assets/js/auth-github.js?v=20260922-002"></script><script type="module" src="assets/js/audit.js?v=20260922-001"></script><script src="assets/js/boot.js?v=20260922-002" defer></script><script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(e=>console.warn("[mPanel PWA] service worker registration failed",e)))}</script>
+<script src="https://unpkg.com/lucide@latest"></script><script type="module" src="assets/js/app.js?v=20260922-019"></script><script type="module" src="assets/js/platform.js?v=20260922-005"></script><script type="module" src="assets/js/auth-github.js?v=20260922-002"></script><script type="module" src="assets/js/audit.js?v=20260922-001"></script><script src="assets/js/boot.js?v=20260922-002" defer></script><script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(e=>console.warn("[mPanel PWA] service worker registration failed",e)))}</script>
 </body></html>
