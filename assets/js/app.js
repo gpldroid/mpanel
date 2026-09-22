@@ -292,7 +292,7 @@ function renderFiles(){
  $("#github-file-import").onclick=()=>openGitHubImport();
  $("#github-file-push").onclick=()=>pushSiteToGitHub();
  $("#new-file").onclick=openNewFileModal;
- each(".file-item",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;const r=await supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);if(r.error){toast(authError(r.error));return}downloadAssetBlob(r.data,asset.path)});
+ each(".file-item:not(.binary-item)",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;const r=await supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);if(r.error){toast(authError(r.error));return}downloadAssetBlob(r.data,asset.path)});
  $("#file-search").oninput=e=>{each(".file-item",b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
  $("#history-file")?.addEventListener("click",openFileHistory);$("#recovery-files")?.addEventListener("click",openFileRecovery);
