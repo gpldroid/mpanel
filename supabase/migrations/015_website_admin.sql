@@ -78,6 +78,8 @@ with check(is_site_member(site_id,array['owner','admin']));
 
 drop policy if exists site_admin_select on public.site_admin_settings;
 create policy site_admin_select on public.site_admin_settings for select using(is_site_member(site_id));
+drop policy if exists site_admin_insert on public.site_admin_settings;
+create policy site_admin_insert on public.site_admin_settings for insert with check(is_site_member(site_id,array['owner','admin']));
 drop policy if exists site_admin_manage on public.site_admin_settings;
 create policy site_admin_manage on public.site_admin_settings for update
 using(is_site_member(site_id,array['owner','admin']))
