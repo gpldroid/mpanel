@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard"};
 const $=s=>document.querySelector(s);
-const $=s=>Array.from(document.querySelectorAll(s));
+const $$=s=>Array.from(document.querySelectorAll(s));
 const each=(selector,callback)=>{
   const nodes=document.querySelectorAll(selector);
   for(let i=0;i<nodes.length;i++)callback(nodes[i],i,nodes);
