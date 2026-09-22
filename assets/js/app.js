@@ -7,18 +7,31 @@ let renderAnalytics=()=>{},initAnalytics=()=>{};
 let renderBuilder=()=>{},initBuilder=()=>{};
 
 async function loadFeatureModules(){
-  const [github,design,builder,analytics,builderUi]=await Promise.all([
-    import("./integrations/github.js"),
-    import("./design/design.js"),
-    import("./builder.js"),
-    import("./analytics.js"),
-    import("./builder-ui.js")
-  ]);
-  ({renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration}=github);
-  ({renderDesign,initDesign}=design);
-  ({buildSiteFiles,buildPreview,validateBuild}=builder);
-  ({renderAnalytics,initAnalytics}=analytics);
-  ({renderBuilder,initBuilder}=builderUi);
+  const modules=[
+    ["GitHub",()=>import("./integrations/github.js")],
+    ["Design",()=>import("./design/design.js")],
+    ["Builder",()=>import("./builder.js")],
+    ["Analytics",()=>import("./analytics.js")],
+    ["Builder UI",()=>import("./builder-ui.js")]
+  ];
+  const results=await Promise.allSettled(modules.map(([,loader])=>loader()));
+  const failures=[];
+  results.forEach((result,index)=>{
+    const name=modules[index][0];
+    if(result.status==="rejected"){
+      failures.push(name);
+      console.error("[mPanel module load] "+name,result.reason);
+      return;
+    }
+    const mod=result.value;
+    if(name==="GitHub")({renderGitHub,initGitHub,openGitHubImport,pushSiteToGitHub,publishGeneratedSite,loadGitHubIntegration}=mod);
+    if(name==="Design")({renderDesign,initDesign}=mod);
+    if(name==="Builder")({buildSiteFiles,buildPreview,validateBuild}=mod);
+    if(name==="Analytics")({renderAnalytics,initAnalytics}=mod);
+    if(name==="Builder UI")({renderBuilder,initBuilder}=mod);
+  });
+  if(failures.length)toast("Optional modules unavailable: "+failures.join(", ")+". Other modules remain available.","error");
+  return failures;
 }
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
 const state={user:null,sites:[],domains:[],seo:[],files:[],adminSettings:null,permissions:null,selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[],analyticsSettings:null,builderTemplates:[],builderBlocks:[],redirects:[],themePresets:[],activeThemePresetId:null};
@@ -127,7 +140,7 @@ function renderAll(){
  try{renderBuilder()}catch(error){console.warn("[mPanel builder render]",error)}
  renderPublishing();
  try{renderAnalytics()}catch(error){console.warn("[mPanel analytics render]",error)}
- $("#plan-usage").textContent=state.sites.length+" / 3 sites";icons();
+ $("#plan-usage").textContent=state.sites.length+" sites · Unlimited";icons();
 }
 
 function renderDashboard(){
@@ -148,7 +161,7 @@ function renderDashboard(){
  '</div><section class="card" style="margin-top:18px"><div class="section-head"><div><h3>Publishing pipeline</h3><p class="muted">The selected website flows from content and design through SEO, build, GitHub, deployment and analytics.</p></div><span class="badge '+(preflight.ok?"success":"warning")+'">'+(preflight.ok?"Build ready":"Build needs attention")+'</span></div><div class="pipeline-grid">'+pipeline.map((x,i)=>'<div class="pipeline-step"><span class="pipeline-index">'+(i+1)+'</span><div><strong>'+esc(x[0])+'</strong><small class="muted">'+esc(x[2])+'</small></div><span class="badge '+(x[1]?"success":"warning")+'">'+(x[1]?"Ready":"Needs setup")+'</span></div>').join("")+'</div>'+(preflight.warnings.length?'<div class="tiny muted" style="margin-top:12px">'+esc(preflight.warnings.slice(0,2).join(" • "))+'</div>':"")+'</section>'+
  '<div class="grid two-col" style="margin-top:18px"><section class="card"><div class="section-head"><h3>Recent websites</h3><button class="btn secondary" data-go="sites">View all</button></div>'+
  (state.sites.length?'<div class="site-list">'+state.sites.slice(0,5).map(siteRow).join("")+'</div>':'<div class="empty"><i data-lucide="globe"></i><p>No websites yet.</p><button class="btn primary" id="dash-add-site">Add your first site</button></div>')+
- '</section><section class="card"><div class="section-head"><h3>Free plan</h3><span class="badge success">Active</span></div><p class="muted">Manage up to 3 websites with domains, SEO tasks and basic monitoring.</p><div class="progress"><i style="width:'+Math.min(100,state.sites.length/3*100)+'%"></i></div><p class="tiny muted">'+state.sites.length+' of 3 website slots used.</p>'+(latest?'<div class="site-list" style="margin-top:14px"><div class="site-row"><span>Latest deployment</span><strong>'+esc(latest.status||"—")+'</strong></div><div class="site-row"><span>Commit</span><code>'+esc((latest.commit_sha||"").slice(0,8)||"—")+'</code></div></div>':"")+'</section></div>';
+ '</section><section class="card"><div class="section-head"><h3>Premium plan</h3><span class="badge success">Active</span></div><p class="muted">Full mPanel access with unlimited websites, domains, content, SEO, GitHub, analytics, builder and publishing workflows.</p><div class="progress"><i style="width:'+100+'%"></i></div><p class="tiny muted">'+state.sites.length+' of 3 website slots used.</p>'+(latest?'<div class="site-list" style="margin-top:14px"><div class="site-row"><span>Latest deployment</span><strong>'+esc(latest.status||"—")+'</strong></div><div class="site-row"><span>Commit</span><code>'+esc((latest.commit_sha||"").slice(0,8)||"—")+'</code></div></div>':"")+'</section></div>';
  $("#dash-add-site")?.addEventListener("click",()=>openSiteModal());
  each("[data-go]",b=>b.onclick=()=>showView(b.dataset.go));
 }
@@ -694,7 +707,7 @@ if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("da
 let signUp=false;
 $("#connection-test")?.addEventListener("click",testSupabaseConnection);
 each(".nav-item[data-view]",b=>b.onclick=()=>showView(b.dataset.view));
-$("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your free account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Start with the free mPanel plan.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
+$("#auth-toggle").onclick=()=>{signUp=!signUp;$("#auth-title").textContent=signUp?"Create your account.":"Manage your websites in one place.";$("#auth-subtitle").textContent=signUp?"Create your premium mPanel account with full dashboard access.":"Sign in to manage sites, domains and SEO tasks.";$("#auth-submit").textContent=signUp?"Create account":"Sign in";$("#auth-toggle").textContent=signUp?"Already have an account? Sign in":"Create a free account"};
 $("#auth-form").onsubmit=async e=>{
  e.preventDefault();
  const btn=$("#auth-submit"),email=$("#auth-email").value.trim(),password=$("#auth-password").value;
@@ -720,17 +733,19 @@ $("#sidebar-close").onclick=()=>$("#sidebar").classList.remove("open");
 $("#profile-btn").onclick=(event)=>{event.stopPropagation();toggleAccountMenu()};
 document.addEventListener("click",event=>{if(!event.target.closest(".account-wrap"))closeAccountMenu()});
 async function initializeFeatureModules(){
- try{
-  await loadFeatureModules();
-  initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()});
-  initDesign({supabase,state,showView,toast,renderAll,icons});
-  initAnalytics({supabase,state,showView,toast,renderAll,icons});
-  initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()});
+  const failures=await loadFeatureModules();
+  const initializers=[
+    ["GitHub",()=>initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()})],
+    ["Design",()=>initDesign({supabase,state,showView,toast,renderAll,icons})],
+    ["Analytics",()=>initAnalytics({supabase,state,showView,toast,renderAll,icons})],
+    ["Builder",()=>initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()})]
+  ];
+  const initResults=await Promise.allSettled(initializers.map(([,fn])=>fn()));
+  initResults.forEach((result,index)=>{
+    if(result.status==="rejected")console.error("[mPanel module init] "+initializers[index][0],result.reason);
+  });
   renderAll();
- }catch(error){
-  console.error("[mPanel feature boot]",error);
-  toast("Some dashboard modules could not load. Core account access remains available.","error");
- }
+  if(failures.length)console.warn("[mPanel] boot completed with optional module failures:",failures);
 }
 
 let authBooting=false;
