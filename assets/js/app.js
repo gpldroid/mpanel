@@ -2,9 +2,11 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { renderGitHub, initGitHub, openGitHubImport, pushSiteToGitHub } from "./integrations/github.js";
 import { renderDesign, initDesign } from "./design/design.js";
+import { buildSiteFiles, buildPreview } from "./builder.js";
+import { publishGeneratedSite } from "./integrations/github.js";
 
 const supabase=createClient(SUPABASE_URL.trim().replace(/\/$/, ""),SUPABASE_ANON_KEY.trim());
-const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null}};
+const state={user:null,sites:[],domains:[],seo:[],files:[],selectedSite:null,selectedFile:null,view:"dashboard",posts:[],pages:[],categories:[],tags:[],github:{connected:false,login:null,token:null,repo:null},design:{layout:[],widgets:[],menus:[],menuItems:[],theme:null},siteSeo:null,revisions:[],deployments:[]};
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
 const each=(selector,callback)=>{
@@ -73,15 +75,17 @@ function siteRow(s){return '<div class="site-row"><div class="site-main"><div cl
 
 async function loadData(){
  if(!state.user)return;
- const [a,b,c]=await Promise.all([
+ const [a,b,c,d,e]=await Promise.all([
   supabase.from("sites").select("*").order("created_at",{ascending:false}),
   supabase.from("domains").select("*,sites(name)").order("created_at",{ascending:false}),
-  supabase.from("seo_checks").select("*").order("created_at",{ascending:false})
+  supabase.from("seo_checks").select("*").order("created_at",{ascending:false}),
+  supabase.from("site_seo_settings").select("*").eq("site_id",state.selectedSite?.id||"00000000-0000-0000-0000-000000000000").maybeSingle(),
+  supabase.from("deployments").select("*").eq("site_id",state.selectedSite?.id||"00000000-0000-0000-0000-000000000000").order("created_at",{ascending:false}).limit(10)
  ]);
- if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error));
- state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;await loadCms();renderAll();
+ if(a.error)toast(authError(a.error)); if(b.error)toast(authError(b.error)); if(c.error)toast(authError(c.error)); if(d.error&&d.error.code!=="PGRST116")toast(authError(d.error)); if(e.error)toast(authError(e.error));
+ state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];state.siteSeo=d.data||null;state.deployments=e.data||[];if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;await loadCms();renderAll();
 }
-function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
+function renderAll(){renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");renderGitHub(state);renderDesign(state,supabase);renderPublishing();$("#plan-usage").textContent=state.sites.length+" / 3 sites";icons()}
 
 function renderDashboard(){
  $("#view-dashboard").innerHTML='<div class="grid stats">'+
@@ -366,12 +370,30 @@ function openDomainModal(){
 }
 async function deleteDomain(id){if(!confirm("Delete this domain?"))return;const{error}=await supabase.from("domains").delete().eq("id",id);if(error)toast(error.message);else loadData()}
 
+function seoScore(data){
+ const checks=[!!data.site_title,!!data.meta_description,!!data.canonical_base,data.robots_index!==false,data.robots_follow!==false,!!data.og_title,!!data.og_description,!!data.schema_type];
+ return Math.round(checks.filter(Boolean).length/checks.length*100);
+}
+async function saveSiteSeo(payload){
+ const s=cmsSite();if(!s)return;
+ const r=await supabase.from("site_seo_settings").upsert({...payload,user_id:state.user.id,site_id:s.id},{onConflict:"site_id"}).select().single();
+ if(r.error){toast(authError(r.error));return}
+ state.siteSeo=r.data;toast("Site SEO settings saved","success");renderSeo();
+}
+function renderPublishing(){
+ const s=cmsSite(),files=s?buildSiteFiles(state):[],preview=files.find(x=>x.path==="index.html")?.content||"",deployments=state.deployments||[];
+ $("#view-publishing").innerHTML='<div class="toolbar"><div><h3>Publishing</h3><p class="muted">Build the website from CMS content, design and SEO, then publish it to the selected GitHub repository.</p></div><button class="btn primary" id="build-publish"><i data-lucide="rocket"></i>Publish website</button></div>'+
+ (s?'<div class="grid two-col"><section class="card"><div class="section-head"><h3>Build output</h3><span class="badge success">'+files.length+' files</span></div><div class="site-list">'+files.slice(0,12).map(f=>'<div class="site-row"><span>'+esc(f.path)+'</span><small class="muted">'+f.mime_type+'</small></div>').join("")+(files.length>12?'<div class="tiny muted">+'+(files.length-12)+' more files</div>':"")+'</div></section><section class="card"><div class="section-head"><h3>Generated preview</h3><button class="btn secondary" id="refresh-build-preview">Refresh</button></div><iframe id="build-preview" class="preview-frame" style="min-height:480px" sandbox="allow-scripts"></iframe></section></div><section class="card" style="margin-top:18px"><h3>Deployment history</h3><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Repository</th><th>Branch</th><th>Files</th><th>Commit</th><th>Date</th></tr></thead><tbody>'+ (deployments.length?deployments.map(d=>'<tr><td><span class="badge '+(d.status==="success"?"success":d.status==="failed"?"warning":"neutral")+'">'+esc(d.status)+'</span></td><td>'+esc(d.repository||"—")+'</td><td>'+esc(d.branch||"—")+'</td><td>'+d.files_count+'</td><td><code>'+esc((d.commit_sha||"").slice(0,8))+'</code></td><td>'+dt(d.created_at)+'</td></tr>').join(""):'<tr><td colspan="6" class="empty">No deployments yet.</td></tr>')+'</tbody></table></div></section>':'<div class="card empty">Select a website first.</div>');
+ $("#build-publish")?.addEventListener("click",async()=>{if(!s)return;try{const filesNow=buildSiteFiles(state);const r=await publishGeneratedSite(filesNow,"mPanel: publish "+s.name);await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:r.repository,branch:r.branch,commit_sha:r.sha,status:"success",files_count:r.files,message:"Published website"});toast("Published "+r.files+" files in one commit","success");await loadData();showView("publishing")}catch(e){await supabase.from("deployments").insert({user_id:state.user.id,site_id:s.id,provider:"github",repository:state.github.repo?.full_name||null,branch:state.github.repo?.branch||null,status:"failed",files_count:0,message:String(e.message||e)});toast("Publish failed: "+e.message)}});
+ $("#refresh-build-preview")?.addEventListener("click",()=>{const f=$("#build-preview");if(f)f.srcdoc=buildPreview(state)});
+ const f=$("#build-preview");if(f)f.srcdoc=preview;
+}
 function renderSeo(){
- const done=state.seo.filter(x=>x.completed).length,total=state.seo.length,pct=total?Math.round(done/total*100):0;
+ const done=state.seo.filter(x=>x.completed).length,total=state.seo.length,pct=total?Math.round(done/total*100):0; const data=state.siteSeo||{}; const score=seoScore(data);
  $("#view-seo").innerHTML='<div class="section-head"><div><h3>SEO checklist</h3><p class="muted">Track essential on-page SEO tasks.</p></div><span class="badge neutral">'+pct+'% complete</span></div><div class="grid two-col"><section class="card"><div class="progress"><i style="width:'+pct+'%"></i></div><div class="checklist" style="margin-top:16px">'+
  (total?state.seo.map(x=>'<label class="check"><input type="checkbox" data-seo="'+x.id+'" '+(x.completed?"checked":"")+'><span><strong>'+esc(x.title)+'</strong><small class="muted" style="display:block">'+esc(x.description||"")+'</small></span></label>').join(""):'<div class="empty">SEO tasks will appear after you add a site.</div>')+
- '</div></section><section class="card"><h3>Recommended basics</h3><ul class="muted"><li>Unique title and meta description</li><li>Canonical URL</li><li>Responsive/mobile layout</li><li>robots.txt and sitemap.xml</li><li>HTTPS and accessible navigation</li></ul></section></div>';
- each("[data-seo]",c=>c.onchange=async()=>{const{error}=await supabase.from("seo_checks").update({completed:c.checked}).eq("id",c.dataset.seo);if(error)toast(error.message);else loadData()});
+ '</div></section><section class="card"><div class="section-head"><h3>Advanced SEO</h3><span class="badge '+(score>=80?"success":"warning")+'">'+score+'% score</span></div><form id="site-seo-form"><div class="form-grid"><label>Site title<input name="site_title" value="'+esc(data.site_title||state.selectedSite?.name||"")+'"></label><label>Canonical base<input name="canonical_base" type="url" value="'+esc(data.canonical_base||state.selectedSite?.url||"")+'"></label><label class="full-field">Meta description<textarea name="meta_description" maxlength="160" rows="3">'+esc(data.meta_description||"")+'</textarea></label><label>OG title<input name="og_title" value="'+esc(data.og_title||"")+'"></label><label>OG image<input name="og_image" type="url" value="'+esc(data.og_image||"")+'"></label><label>Twitter title<input name="twitter_title" value="'+esc(data.twitter_title||"")+'"></label><label>Twitter image<input name="twitter_image" type="url" value="'+esc(data.twitter_image||"")+'"></label><label>Schema type<input name="schema_type" value="'+esc(data.schema_type||"WebSite")+'"></label><label>Twitter card<select name="twitter_card"><option value="summary_large_image" '+(data.twitter_card==="summary_large_image"?"selected":"")+'>summary_large_image</option><option value="summary" '+(data.twitter_card==="summary"?"selected":"")+'>summary</option></select></label><label class="full-field">OG description<textarea name="og_description" rows="2">'+esc(data.og_description||"")+'</textarea></label><label class="full-field">Twitter description<textarea name="twitter_description" rows="2">'+esc(data.twitter_description||"")+'</textarea></label><label class="full-field">robots.txt<textarea name="robots_txt" rows="4">'+esc(data.robots_txt||"User-agent: *\\nAllow: /\\n\\nSitemap: /sitemap.xml")+'</textarea></label><label class="check"><input type="checkbox" name="robots_index" '+(data.robots_index!==false?"checked":"")+'><span>Allow indexing</span></label><label class="check"><input type="checkbox" name="robots_follow" '+(data.robots_follow!==false?"checked":"")+'><span>Allow link following</span></label><label class="check"><input type="checkbox" name="sitemap_enabled" '+(data.sitemap_enabled!==false?"checked":"")+'><span>Generate sitemap.xml</span></label><label class="full-field">Custom head HTML<textarea name="custom_head" rows="4" class="cms-code">'+esc(data.custom_head||"")+'</textarea></label></div><div class="modal-actions"><button class="btn primary">Save SEO settings</button></div></form></section></div>';
+ $("#site-seo-form")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);await saveSiteSeo({site_title:f.get("site_title"),meta_description:f.get("meta_description"),canonical_base:f.get("canonical_base"),robots_index:f.get("robots_index")==="on",robots_follow:f.get("robots_follow")==="on",og_title:f.get("og_title"),og_description:f.get("og_description"),og_image:f.get("og_image"),twitter_card:f.get("twitter_card"),twitter_title:f.get("twitter_title"),twitter_description:f.get("twitter_description"),twitter_image:f.get("twitter_image"),schema_type:f.get("schema_type"),sitemap_enabled:f.get("sitemap_enabled")==="on",robots_txt:f.get("robots_txt"),custom_head:f.get("custom_head")})}); each("[data-seo]",c=>c.onchange=async()=>{const{error}=await supabase.from("seo_checks").update({completed:c.checked}).eq("id",c.dataset.seo);if(error)toast(error.message);else loadData()});
 }
 
 function renderMonitoring(){
@@ -383,7 +405,7 @@ function renderSettings(){
  $("#view-settings").innerHTML='<div class="section-head"><div><h3>Settings</h3><p class="muted">Account and dashboard preferences.</p></div></div><div class="grid two-col"><section class="card"><h3>Account</h3><div style="margin-top:15px"><label>Email<input value="'+esc(state.user?.email||"")+'" disabled></label></div><p class="tiny muted">Authentication is handled by Supabase Auth.</p></section><section class="card"><h3>Appearance</h3><p class="muted">Choose light or dark mode.</p><button class="btn secondary" id="settings-theme"><i data-lucide="moon"></i>Toggle theme</button></section></div>';
  $("#settings-theme").onclick=toggleTheme;
 }
-function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",posts:"Posts",pages:"Pages",categories:"Categories",tags:"Tags",files:"File Manager",theme:"Theme",layout:"Layout",widgets:"Widgets / Gadgets",navigation:"Navigation",github:"GitHub",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
+function showView(v){state.view=v;each(".view",x=>x.classList.add("hidden"));$("#view-"+v).classList.remove("hidden");each(".nav-item[data-view]",b=>b.classList.toggle("active",b.dataset.view===v));const n={dashboard:"Dashboard",manager:"Website Manager",posts:"Posts",pages:"Pages",categories:"Categories",tags:"Tags",files:"File Manager",theme:"Theme",layout:"Layout",widgets:"Widgets / Gadgets",navigation:"Navigation",github:"GitHub",publishing:"Publishing",sites:"My Sites",domains:"Domains",seo:"SEO",monitoring:"Monitoring",settings:"Settings"};$("#page-title").textContent=n[v]||"Dashboard";$("#sidebar").classList.remove("open");icons()}
 function toggleTheme(){document.body.classList.toggle("dark");localStorage.setItem("mpanel-theme",document.body.classList.contains("dark")?"dark":"light")}
 if(localStorage.getItem("mpanel-theme")==="dark")document.body.classList.add("dark");
 
@@ -408,7 +430,7 @@ $("#auth-form").onsubmit=async e=>{
 };
 $("#logout-btn").onclick=async()=>{await supabase.auth.signOut();state.user=null;handleAuth()};
 $("#theme-btn").onclick=toggleTheme;$("#menu-btn").onclick=()=>$("#sidebar").classList.toggle("open");$("#profile-btn").onclick=()=>showView("settings");
-initGitHub({supabase,state,showView,toast,renderAll,icons});
+initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:async()=>{showView("publishing");renderPublishing()}});
 initDesign({supabase,state,showView,toast,renderAll,icons});
 
 async function handleAuth(){
