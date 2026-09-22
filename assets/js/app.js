@@ -5,6 +5,7 @@ let renderDesign=()=>{},initDesign=()=>{};
 let buildSiteFiles=()=>({}),buildPreview=()=>{},validateBuild=()=>({ok:true,errors:[],warnings:[]});
 let renderAnalytics=()=>{},initAnalytics=()=>{};
 let renderBuilder=()=>{},initBuilder=()=>{};
+let renderWorkspaceIO=()=>{},initWorkspaceIO=()=>{};
 
 async function loadFeatureModules(){
   const modules=[
@@ -12,7 +13,8 @@ async function loadFeatureModules(){
     ["Design",()=>import("./design/design.js")],
     ["Builder",()=>import("./builder.js")],
     ["Analytics",()=>import("./analytics.js")],
-    ["Builder UI",()=>import("./builder-ui.js")]
+    ["Builder UI",()=>import("./builder-ui.js")],
+    ["Workspace IO",()=>import("./workspace-io.js")]
   ];
   const results=await Promise.allSettled(modules.map(([,loader])=>loader()));
   const failures=[];
@@ -29,6 +31,7 @@ async function loadFeatureModules(){
     if(name==="Builder")({buildSiteFiles,buildPreview,validateBuild}=mod);
     if(name==="Analytics")({renderAnalytics,initAnalytics}=mod);
     if(name==="Builder UI")({renderBuilder,initBuilder}=mod);
+    if(name==="Workspace IO")({renderWorkspaceIO,initWorkspaceIO}=mod);
   });
   if(failures.length)toast("Optional modules unavailable: "+failures.join(", ")+". Other modules remain available.","error");
   return failures;
@@ -134,7 +137,7 @@ async function loadData(){
  state.sites=a.data||[];state.domains=b.data||[];state.seo=c.data||[];const savedSiteId=localStorage.getItem(SITE_CONTEXT_KEY);if(savedSiteId&&state.sites.some(x=>x.id===savedSiteId))state.selectedSite=state.sites.find(x=>x.id===savedSiteId);else if(!state.selectedSite||!state.sites.some(x=>x.id===state.selectedSite.id))state.selectedSite=state.sites[0]||null;if(state.selectedSite)localStorage.setItem(SITE_CONTEXT_KEY,state.selectedSite.id);else localStorage.removeItem(SITE_CONTEXT_KEY);const siteId=state.selectedSite?.id;if(siteId){const [seoSettings,deploymentRows,analyticsSettings,adminSettings,permissions]=await Promise.all([supabase.from("site_seo_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("deployments").select("*").eq("site_id",siteId).order("created_at",{ascending:false}).limit(10),supabase.from("site_analytics_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.from("site_admin_settings").select("*").eq("site_id",siteId).maybeSingle(),supabase.rpc("get_site_permissions",{p_site_id:siteId})]);state.siteSeo=seoSettings.data||null;state.deployments=deploymentRows.data||[];state.analyticsSettings=analyticsSettings?.data||null;state.adminSettings=adminSettings?.data||null;state.permissions=permissions?.data||null;const [bt,bb,rr,tp]=await Promise.all([supabase.from("builder_templates").select("*").eq("site_id",siteId).order("created_at",{ascending:true}),supabase.from("builder_blocks").select("*").eq("site_id",siteId).order("position",{ascending:true}),supabase.from("seo_redirects").select("*").eq("site_id",siteId).order("created_at",{ascending:false}),supabase.from("theme_presets").select("*").eq("user_id",state.user.id).order("name")]);state.builderTemplates=bt.data||[];state.builderBlocks=bb.data||[];state.redirects=rr.data||[];state.themePresets=tp.data||[];}else{state.siteSeo=null;state.deployments=[];state.analyticsSettings=null;state.adminSettings=null;state.permissions=null;state.builderTemplates=[];state.builderBlocks=[];state.redirects=[];state.themePresets=[];state.activeThemePresetId=null;}await loadCms();await loadGitHubIntegration();renderAll();
 }
 function renderAll(){
- renderSiteContext();renderDashboard();renderManager();renderFiles();renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");
+ renderSiteContext();renderDashboard();renderManager();renderFiles();try{renderWorkspaceIO()}catch(error){console.warn("[mPanel workspace IO render]",error)}renderTheme();renderSites();renderDomains();renderSeo();renderMonitoring();renderSettings();renderPosts();renderPages();renderTaxonomy("categories");renderTaxonomy("tags");
  try{renderGitHub(state)}catch(error){console.warn("[mPanel GitHub render]",error)}
  try{renderDesign(state,supabase)}catch(error){console.warn("[mPanel design render]",error)}
  try{renderBuilder()}catch(error){console.warn("[mPanel builder render]",error)}
@@ -738,7 +741,8 @@ async function initializeFeatureModules(){
     ["GitHub",()=>initGitHub({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>publishCurrentSite()})],
     ["Design",()=>initDesign({supabase,state,showView,toast,renderAll,icons})],
     ["Analytics",()=>initAnalytics({supabase,state,showView,toast,renderAll,icons})],
-    ["Builder",()=>initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()})]
+    ["Builder",()=>initBuilder({supabase,state,showView,toast,renderAll,icons,publishWebsite:()=>window.__mPanelPublish?.()})],
+    ["Workspace IO",()=>initWorkspaceIO({supabase,state,showView,toast,renderAll,icons,openModal,closeModal,reloadSiteFiles:loadSiteFiles})]
   ];
   const initResults=await Promise.allSettled(initializers.map(([,fn])=>fn()));
   initResults.forEach((result,index)=>{
