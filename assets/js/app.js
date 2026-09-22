@@ -53,6 +53,8 @@ async function setSelectedSite(id){
  state.selectedSite=next;
  if(next)localStorage.setItem(SITE_CONTEXT_KEY,next.id);else localStorage.removeItem(SITE_CONTEXT_KEY);
  state.selectedFile=null;
+ state.selectedBinary=null;
+ state.previewPagePath="index.html";
  state.design={layout:[],widgets:[],menus:[],menuItems:[],theme:null,loadedSiteId:null};
  state.activeThemePresetId=null;
  // Reload every site-scoped module together so switching sites can never leave stale CMS,
@@ -194,7 +196,7 @@ async function ensureWorkspaceFiles(site){
   const again=await supabase.from("site_files").select("*").eq("site_id",site.id).order("path");
   state.files=again.data||[];
  }else state.files=data;
- if(!state.selectedFile||!state.files.some(x=>x.id===state.selectedFile.id))state.selectedFile=state.files.find(x=>x.path==="index.html")||state.files[0]||null;
+ if(!state.selectedFile||!state.files.some(x=>x.id===state.selectedFile.id))state.selectedFile=state.files.find(x=>x.path==="index.html")||state.files[0]||null;state.selectedBinary=null;state.previewPagePath="index.html";
  renderFiles();renderTheme();updatePreview();
 }
 async function openWebsiteManager(id){
@@ -285,14 +287,14 @@ function renderFiles(){
  if(!s){$("#view-files").innerHTML='<div class="card workspace-empty"><div><h3>No website selected</h3><button class="btn primary" id="files-go-sites">Choose a website</button></div></div>';$("#files-go-sites")?.addEventListener("click",()=>showView("sites"));return}
  const file=state.selectedFile;
  $("#view-files").innerHTML='<div class="workspace-head"><div><span class="eyebrow">FILE MANAGER</span><h3 style="margin:3px 0">'+esc(s.name)+'</h3><p class="muted">Edit website source files safely with version snapshots.</p></div><div class="workspace-actions"><button class="btn secondary" id="files-back"><i data-lucide="arrow-left"></i>Overview</button><button class="btn secondary" id="github-file-import"><i data-lucide="github"></i>GitHub</button><button class="btn secondary" id="github-file-push"><i data-lucide="upload"></i>Push</button><button class="btn primary" id="new-file"><i data-lucide="file-plus-2"></i>New file</button></div></div>'+
- '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Project files</h3><span class="badge neutral">'+(state.files.length+(state.binaryFiles||[]).length)+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+(state.binaryFiles||[]).map(x=>'<button class="file-item binary-item" data-binary-id="'+x.id+'"><i data-lucide="'+(x.mime_type?.startsWith("image/")?"image":"paperclip")+'"></i><span>'+esc(x.path)+'</span><span class="protected-file">'+Math.ceil((x.size_bytes||0)/1024)+' KB</span></button>').join("")+'</div></div></aside>'+
- '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(file?.path||"Select a file")+'</div><div class="editor-actions">'+(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn secondary" id="recovery-files"><i data-lucide="archive-restore"></i>Recovery</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
- '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
+ '<div class="workspace-grid"><aside class="file-tree"><div class="file-tree-head"><h3>Project files</h3><span class="badge neutral">'+(state.files.length+(state.binaryFiles||[]).length)+'</span></div><input class="file-search" id="file-search" placeholder="Search files…"><div class="file-list" id="file-list">'+state.files.map(x=>'<button class="file-item '+(file?.id===x.id?"active":"")+'" data-file-id="'+x.id+'"><i data-lucide="'+(x.mime_type==="text/html"?"file-code-2":x.mime_type==="text/css"?"file-cog":"file-text")+'"></i><span>'+esc(x.path)+'</span>'+(x.is_protected?'<span class="protected-file">PROTECTED</span>':"")+'</button>').join("")+(state.binaryFiles||[]).map(x=>'<button class="file-item binary-item '+(state.selectedBinary?.id===x.id?"active":"")+'" data-binary-id="'+x.id+'"><i data-lucide="'+(x.mime_type?.startsWith("image/")?"image":"paperclip")+'"></i><span>'+esc(x.path)+'</span><span class="protected-file">'+Math.ceil((x.size_bytes||0)/1024)+' KB</span></button>').join("")+'</div></div></aside>'+
+ '<section class="editor-card"><div class="editor-toolbar"><div class="editor-file">'+esc(state.selectedBinary?.path||file?.path||"Select a file")+'</div><div class="editor-actions">'+(state.selectedBinary?'<button class="btn secondary" id="rename-binary"><i data-lucide="pencil"></i>Rename</button><button class="btn secondary danger-text" id="delete-binary"><i data-lucide="trash-2"></i>Delete</button>':(file?'<button class="btn secondary" id="history-file"><i data-lucide="history"></i>History</button><button class="btn secondary" id="recovery-files"><i data-lucide="archive-restore"></i>Recovery</button><button class="btn primary" id="save-file"><i data-lucide="save"></i>Save</button>'+(!file.is_protected?'<button class="btn secondary danger-text" id="delete-file"><i data-lucide="trash-2"></i>Delete</button>':""):"")+'</div></div><textarea id="code-editor" class="code-editor" spellcheck="false" '+(file&&!state.selectedBinary?"":"disabled")+'>'+esc(file?.content||"")+'</textarea></section>'+
+ '<aside class="preview-card"><div class="preview-head"><strong>Live preview</strong><div class="preview-tools"><select id="preview-page" aria-label="Preview page" title="Preview page">'+state.files.filter(x=>/\.html?$/i.test(x.path)).map(x=>'<option value="'+esc(x.path)+'" '+(state.previewPagePath===x.path?"selected":"")+'>'+esc(x.path)+'</option>').join("")+'</select><button class="icon-btn" id="refresh-preview" title="Refresh"><i data-lucide="refresh-cw"></i></button><button class="icon-btn" id="open-preview" title="Open preview"><i data-lucide="external-link"></i></button></div></div><iframe id="workspace-preview" class="preview-frame" sandbox="allow-scripts"></iframe></aside></div>';
  $("#files-back").onclick=()=>showView("manager");
  $("#github-file-import").onclick=()=>{try{openWorkspaceIO()}catch(error){openGitHubImport()}};
  $("#github-file-push").onclick=()=>pushSiteToGitHub();
  $("#new-file").onclick=openNewFileModal;
- each(".file-item:not(.binary-item)",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;const r=await supabase.storage.from(asset.storage_bucket||"mpanel-projects").download(asset.storage_object_path);if(r.error){toast(authError(r.error));return}downloadAssetBlob(r.data,asset.path)});
+ each(".file-item:not(.binary-item)",b=>{state.selectedFile=state.files.find(x=>x.id===b.dataset.fileId)||null;renderFiles();updatePreview()}); each(".binary-item",b=>b.onclick=async()=>{const asset=state.binaryFiles.find(x=>x.id===b.dataset.binaryId);if(!asset)return;state.selectedBinary=asset;state.selectedFile=null;renderFiles();updatePreview()});
  $("#file-search").oninput=e=>{each(".file-item",b=>b.style.display=b.textContent.toLowerCase().includes(e.target.value.toLowerCase())?"flex":"none")};
  $("#save-file")?.addEventListener("click",saveSelectedFile);
  $("#history-file")?.addEventListener("click",openFileHistory);$("#recovery-files")?.addEventListener("click",openFileRecovery);
@@ -322,6 +324,8 @@ async function saveSelectedFile(){
 function downloadAssetBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.split("/").pop()||"asset";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}
 let previewGeneration=0;
 let previewObjectUrls=[];
+state.selectedBinary=null;
+state.previewPagePath="index.html";
 
 function previewPath(path,base=""){
  const clean=String(path||"").trim().split("#")[0].split("?")[0];
@@ -359,7 +363,9 @@ function rewritePreviewAssets(source,assetMap,base=""){
  return out;
 }
 async function buildPreviewDocument(generation){
- const index=state.files.find(x=>x.path==="index.html")?.content||"";
+ const pagePath=state.previewPagePath||"index.html";
+ const pageFile=state.files.find(x=>x.path===pagePath)||state.files.find(x=>x.path==="index.html");
+ const index=pageFile?.content||"";
  if(!index)return "";
  const textByPath=new Map(state.files.map(x=>[x.path,x]));
  const binaryByPath=new Map((state.binaryFiles||[]).map(x=>[x.path,x]));
@@ -369,7 +375,7 @@ async function buildPreviewDocument(generation){
  const doc=parser.parseFromString(index,"text/html");
  const links=[...doc.querySelectorAll('link[rel~="stylesheet"][href]')];
  for(const link of links){
-  const ref=previewReference(link.getAttribute("href"),"index.html");
+  const ref=previewReference(link.getAttribute("href"),pagePath);
   const file=ref&&textByPath.get(ref.path);
   if(file){
    localCss.push({path:file.path,content:file.content||""});
@@ -382,7 +388,7 @@ async function buildPreviewDocument(generation){
  }
  const scripts=[...doc.querySelectorAll('script[src]')];
  for(const script of scripts){
-  const ref=previewReference(script.getAttribute("src"),"index.html");
+  const ref=previewReference(script.getAttribute("src"),pagePath);
   const file=ref&&textByPath.get(ref.path);
   if(file){
    localJs.push({path:file.path,content:file.content||""});
@@ -411,7 +417,7 @@ async function buildPreviewDocument(generation){
   return "";
  }
  const html=doc.documentElement.outerHTML;
- let body=rewritePreviewAssets(html,assetMap,"index.html");
+ let body=rewritePreviewAssets(html,assetMap,pagePath);
  const cssBlocks=localCss.map(file=>'<style data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path)+'</style>').join("");
  const jsBlocks=localJs.map(file=>'<script data-mpanel-file="'+esc(file.path)+'">'+rewritePreviewAssets(file.content,assetMap,file.path).replace(/<\/script/gi,"<\\/script")+'</script>').join("");
  body=body.replace("</head>",cssBlocks+"</head>");
